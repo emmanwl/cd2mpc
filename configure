@@ -1,0 +1,390 @@
+#! /usr/bin/env sh
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
+#@(#) All rights reserved.
+#@(#)
+#@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
+#@(#) provided these redistributions must retain the above copyright, this condition and the following
+#@(#) disclaimer.
+#@(#)
+#@(#) THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#@(#) WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+#@(#) FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE
+#@(#) FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+#@(#) PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTER-
+#@(#) -RUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+#@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#@(#)
+#@(#) This is the makefile configuration script for the cd2mpc distribution.
+CONFIGURE_VERSION=1.0
+
+E_SUCCESS=0
+E_FAILURE=1
+
+# Bootstrap shell
+__bootstrap() {
+    local target="${TMPDIR:-/tmp}/${1}"
+    if [ ! -e "$1" ]; then
+       printf "Bootstrap failed: could not find ${1}, exiting\n" >&2
+       return ${E_FAILURE}
+    fi
+    perl -pe "s#<__(.*?)__>#.#g" "$1" > ${target}.$$
+    . ${target}.$$
+    rm -f ${target}.$$
+}
+
+__bootstrap "libopt4shell.sh"
+
+# Shell name
+__shell="${0##*/}"
+# Brief
+# Extract configure body.
+__extract_configure_line_number_minus_one() {
+    sed -n "/[[:space:]]*__configure[[:space:]]\{1,\}[^(]/=" ${0} 2>/dev/null | awk 'END {print (NR==1) ? $NF - 1 : "$"}'
+}
+# Brief
+# Implementation for the type interface.
+is_string() { __is_of_match "$1" "[[:print:]]+"; }
+is_path() { __is_path "$1"; }
+# Brief
+# Define options set.
+__options_set() {
+    local options="I:install-dir:1@path:Specify the install directory <install-dir>
+                   r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
+                   i:install@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the <install-dir>
+                   D:define:1@key-value:Specify a search/replacement pattern within a key/value pair <KEY>=<VALUE>: '__KEY__' being the searched pattern and 'VALUE' its replacement string
+                   c:dot-file:1@key-value-path:Install, as a dotfile, the file located in the current directory and whose basename is 'KEY' to the target directory path 'VALUE'
+                   t:test@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the test directory hierarchy
+                   v:version:0:Print version information and exit
+                   h:help:0:Print help information and exit"
+    printf "%s" "$options"
+}
+# Brief
+# Print version information.
+__print_version() {
+cat <<version >&2
+
+This is ${__shell} v${CONFIGURE_VERSION}.
+${__shell} is a cli tool that automates test/install tasks for shell projects. A shell project refers to a
+collection of scripts (*.sh) and configuration files (*rc) referencing parametrized paths. The tool aims at
+testing and installing any number of scripts in a centralized way.
+
+${__shell} parses files named '*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals
+match predefined test/install/check tasks.
+
+These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
+--define KEY=<VALUE> switch. '*rc' resources can be marked as dotfiles within the special switch --dot-file 
+<KEY>=<VALUE> where <KEY> denotes the actual file basename (minus the leading '.') and <VALUE> the targeted
+directory path.
+
+Type ${__shell} -h for configuration options.
+
+Example:
+
+Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh } lying in the current directory,
+libscript<1|2>.sh being referenced in those resources within the pattern '<__libdir__>/libscript<1|2>.sh',
+the command:
+
+./${__shell} --resources-dir=. --define libdir=${HOME}/libscript --install-dir ${HOME}/bin --test=libscript1test.sh
+--install=script.sh --dot-file scriptrc=${HOME} would generate a makefile from which:
+
+- 'make install' will build the following file tree:
+  {
+    ~/bin/script.sh
+    ~/.scriptrc
+    ~/libscript/libscript1.sh
+    ~/libscript/libscript2.sh
+  }
+
+- 'make test' would spawn a new shell to run libscript1test.sh
+
+- 'make clean' would leave the place clean (wiping out temporary files) before removing the makefile itself.
+
+version
+}
+# Brief
+# Return the value associated to the first key that
+# matches ${1} in ${@}.
+__get_key_value() {
+    local key="$(__lowerize "$1")" entry value
+    shift
+    for entry in ${@}; do
+        if [ "$(__lowerize "${entry%%=*}")" = "$key" ]; then
+           for value in $(__split_tokens_accordingly "," "${entry#*=}"); do
+               echo "$value"
+           done
+           return ${E_SUCCESS}
+        fi
+    done
+    return ${E_FAILURE}
+}
+#
+__source_replace_expression() {
+    local entry expression
+    for entry in ${@}; do
+        if [ ! "${entry##*=*}" ]; then
+           if [ "$expression" ]; then
+              expression="${expression};s#<__${entry%%=*}__>#${entry#*=}#g"
+           else
+              expression="s#<__${entry%%=*}__>#${entry#*=}#g"
+           fi
+        fi
+    done
+    printf "%s" "$expression"
+}
+#
+__test_replace_expression() {
+    local entry expression wrkdir="$(__get_key_value "WRKDIR" "$@")"
+    for entry in ${@}; do
+        if [ ! "${entry##*=*}" ]; then
+           if [ "$expression" ]; then
+              if [ ! "${entry##*\.*}" ]; then
+                 expression="${expression};s#<__${entry%%=*}__>#${wrkdir}/test/${entry##*/\.}#g"
+              else
+                 expression="${expression};s#<__${entry%%=*}__>#${wrkdir}/test#g"
+              fi
+           elif [ ! "${entry##*\.*}" ]; then
+              expression="s#<__${entry%%=*}__>#${wrkdir}/test/${entry##*/\.}#g"
+           else
+              expression="s#<__${entry%%=*}__>#${wrkdir}/test#g"
+           fi
+        fi
+    done
+    printf "%s" "$expression"
+}
+# Brief
+# List *.sh (excluding potentially *test.sh)
+# and *rc files.
+__list_files_accordingly() {
+    local exclude_tests=false file test match=false
+    local resourcesdir="$(__get_key_value "RESOURCES_DIR" "$@")"
+    local tests="$(__get_key_value "TEST" "$@")"
+    case "$1" in
+       --exclude-tests) exclude_tests=true; shift ;;
+    esac
+    for file in ${resourcesdir}/*.sh ${resourcesdir}/*rc; do
+        if [ "$file" != "${resourcesdir}/*.sh" -a "$file" != "${resourcesdir}/*rc" ]; then
+           match=false
+           for test in ${tests}; do
+               if [ "$test" = "$(basename "$file")" ]; then
+                  match=true
+                  break
+               fi
+           done
+           if ${match}; then
+              ${exclude_tests} || echo "$file"
+           else
+              echo "$file"
+           fi
+        fi
+    done
+}
+#
+__copy_files() {
+    __list_files_accordingly "$@" | xargs -I{} cp {} "$(__get_key_value "TARGETDIR" "$@")"
+}
+#
+copy_sources() {
+    __copy_files --exclude-tests "$@"
+}
+#
+copy_tests() {
+    __copy_files "$@"
+}
+# Brief
+# Edit in place *.sh and *rc files to substitute
+# specified patterns with user defined values.
+filter_sources() {
+    local wrkdir="$(__get_key_value "WRKDIR" "$@")"
+    perl -i -pe "$(__source_replace_expression "$@")" "${wrkdir}/install/"* 2>/dev/null
+    local key="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "${wrkdir}/install/"* 2>/dev/null | head -n1)"
+    if [ "$key" ]; then
+       printf "Configure failed: found at least one resource holding a unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
+       return ${E_FAILURE}
+    fi
+    return ${E_SUCCESS}
+}
+#
+filter_tests() {
+    local wrkdir="$(__get_key_value "WRKDIR" "$@")"
+    perl -i -pe "$(__test_replace_expression "$@")" "${wrkdir}/test/"* 2>/dev/null
+    local key="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "${wrkdir}/test/"* 2>/dev/null | head -n1)"
+    if [ "$key" ]; then
+       printf "Configure failed: found at least one resource holding a unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
+       return ${E_FAILURE}
+    fi
+    return ${E_SUCCESS}
+}
+#
+__shell_search_pattern() {
+    local expression entry
+    for entry in ${@}; do
+        case "${entry%%=*}" in
+           install_dir|test|install|*rc) ;;
+                                      *) if [ ! "$expression" ]; then
+                                            expression="<__${entry%%=*}__>"
+                                         else
+                                            expression="${expression}|<__${entry%%=*}__>"
+                                         fi ;;
+        esac
+    done
+    printf "%s" "(/{1,}\w{1,}/)*(${expression})/{1,}(\w{1,}/{1,})*\w{1,}\.sh"
+}
+#
+__configuration_file_search_pattern() {
+   local expression entry
+   for entry in ${@}; do
+       case "${entry%%=*}" in
+          install_dir|test|install) ;;
+                               *rc) if [ ! "$expression" ]; then
+                                       expression="<__${entry%%=*}__>"
+                                    else
+                                       expression="${expression}|<__${entry%%=*}__>"
+                                    fi ;;
+       esac
+   done
+   printf "%s" "(/{1,}\w{1,}/)*(${expression})"
+}
+# Brief
+# Evaluate paths before sorting them
+# to unicity.
+__render_paths() { sed "$(__source_replace_expression "$@");s#/\{2,\}#/#g" | sort -u ; }
+# Brief
+# Install target directory layout.
+build_layout() {
+    local wrkdir="$(__get_key_value "WRKDIR" "$@")" resource install_dir="$(__get_key_value "INSTALL_DIR" "$@")" basename
+    #
+    {
+      grep -whoE "$(__shell_search_pattern "$@")" $(__list_files_accordingly --exclude-tests "$@") 2>/dev/null | __render_paths "$@" | while read resource
+      do
+          echo -c -m 755 -d "$(dirname ${resource})"
+          echo -c -m 644 "${wrkdir}/install/$(basename ${resource})" "$resource"
+      done
+      for resource in $(__get_key_value "INSTALL" "$@"); do
+         echo -c -m 755 -d "$install_dir"
+         echo -c -m 755 "${wrkdir}/install/${resource}" "${install_dir}/${resource}"
+      done
+      #
+      grep -whoE "$(__configuration_file_search_pattern "$@")" $(__list_files_accordingly --exclude-tests "$@") 2>/dev/null | __render_paths "$@" | while read resource
+      do
+          basename=$(basename ${resource})
+          echo -c -m 755 -d "$(dirname ${resource})"
+          echo -c -m 644 "${wrkdir}/install/${basename#\.}" "$resource"
+      done
+    } | awk '!commands[$0]++' | xargs -t -n5 install
+}
+# Brief
+# Build makefile.
+__makefile() {
+    local wrkdir="/tmp/target" value resource basename associate
+    {
+      printf "# Generated by configure version ${CONFIGURE_VERSION}.\n"
+      printf "CONFIGURE_ARGS = ${@}\n"
+      printf "RESOURCES_DIR = "$(__get_key_value "RESOURCES_DIR" "$@")"\n"
+      printf "WRKDIR = ${wrkdir}\n"
+      printf "INSTALL_DIR = "$(__get_key_value "INSTALL_DIR" "$@")"\n"
+      printf "INSTALL = /usr/bin/install -c\n"
+      printf "\n"
+      printf "target:\n"
+      printf "\t@rm -rf \$(WRKDIR)\n"
+      printf "\t@\$(INSTALL) -d -m 755 \$(WRKDIR)\n"
+      printf "\n"
+      printf "install_directory: target\n"
+      printf "\t@\$(INSTALL) -d -m 755 \$(WRKDIR)/install\n"
+      printf "\n"
+      printf "test_directory: target\n"
+      printf "\t@\$(INSTALL) -d -m 755 \$(WRKDIR)/test\n"
+      printf "\n"
+      printf "copy_sources: install_directory\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_sources\n"
+      printf "\t@echo copy_sources TARGETDIR=\$(WRKDIR)/install \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_sources\n"
+      printf "\t@sh \$(WRKDIR)/copy_sources\n"
+      printf "\n"
+      printf "copy_tests: test_directory\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_tests\n"
+      printf "\t@echo copy_tests TARGETDIR=\$(WRKDIR)/test \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_tests\n"
+      printf "\t@sh \$(WRKDIR)/copy_tests\n"
+      printf "\n"
+      printf "copy: copy_sources copy_tests\n"
+      printf "\n"
+      printf "filter_sources: copy_sources\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/filter_sources\n"
+      printf "\t@echo filter_sources WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS)>> \$(WRKDIR)/filter_sources\n"
+      printf "\t@sh \$(WRKDIR)/filter_sources\n"
+      printf "\n"
+      printf "filter_tests: copy_tests\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/filter_tests\n"
+      printf "\t@echo filter_tests WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS) >> \$(WRKDIR)/filter_tests\n"
+      printf "\t@sh \$(WRKDIR)/filter_tests\n"
+      printf "\n"
+      printf "filter: filter_sources filter_tests\n"
+      printf "\n"
+      printf "check: filter_sources\n"
+      {
+        for value in $(__get_key_value "INSTALL" "$@"); do
+            if [ -f "$value" ]; then
+               printf "\t@shellcheck \$(WRKDIR)/install/${value} || { echo Shellcheck exited with a non-zero status when checking ${value}; }\n"
+            fi
+        done
+      }
+      printf "\n"
+      printf "test: filter_tests\n"
+      {
+        for value in $(__get_key_value "TEST" "$@"); do
+            if [ -f "$value" ]; then
+               printf "\t@sh \$(WRKDIR)/test/${value} || { echo Test ${value} failed; return 1; }\n"
+            fi
+        done
+      } | sort -R
+      printf "\n"
+      printf "install: filter_sources\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/build_layout\n"
+      printf "\t@echo build_layout WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS) >> \$(WRKDIR)/build_layout\n"
+      printf "\t@sh \$(WRKDIR)/build_layout\n"
+      printf "\n"
+      printf "clean:\n"
+      printf "\t@rm -rf makefile \$(WRKDIR)\n"
+    } > makefile 2>/dev/null
+    test -f makefile 2>/dev/null
+}
+# Brief
+# Check whether ${1} denotes a resolvable path
+is_real_path() {
+    realpath "$1" >/dev/null 2>&1
+}
+# Brief
+# Parse command line arguments and map them using
+# the long option name as the key and the option
+# argument as the value.
+__parse_options() {
+    local argv key
+    while __argp_parse /options="$(__options_set)" /filter-args-to-uniqueness /callback-option-prefix=_opt /required-options="I,i,r" "$@"
+    do
+        case "$_opt" in
+               h) __argp_parse_opts_help
+                  return ${E_SUCCESS}                                                    ;;
+               v) __print_version
+                  return ${E_SUCCESS}                                                    ;;
+               r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
+               I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
+             \@i) __accumulate "INSTALL=${_optarg}" argv                                 ;;
+             \@t) __accumulate "TEST=${_optarg}" argv                                    ;;
+               D) __accumulate_once "$_optarg" argv                                      ;;
+               c) __accumulate_once "${_optarg%%=*}=${_optarg#*=}/.${_optarg%%=*}" argv  ;;
+        esac
+    done
+    printf "%s" "$argv"
+}
+#
+__configure () {
+    local argv
+    if ! argv="$(__parse_options $@)"; then
+       return ${E_FAILURE}
+    fi
+    if ! __makefile "$argv"; then
+       printf "Configure failed: could not generate makefile.\n" >&2
+       return ${E_FAILURE}
+    fi
+}
+
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --define libdir=${HOME}/libs4shell --define libtools=${HOME}/libs4shell/libtools --test=libopt4test.sh --install=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell

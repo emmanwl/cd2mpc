@@ -5,21 +5,19 @@
 # - L (the logger level)
 # - D (the logging timestamp "y-m-d hour(24):min:sec")
 # - F (the file where the logging event occurred)
-# - N (the logging counter)
 # - H (the hostname)
 # - M (the message)
 # - P (the pid of the current process)
-# - T (a brief stack trace)
 # - % (the literal percent sign '%')
-# The N specifier can be prefixed with a zero-padding indicator
-# so the required number of leading zeros will be added.
-__pattern="%D,%5N - {%H} - [%L] - %F | %M"
+#
+__pattern_layout="%D - {%H} - (%L) - %F | %M"
 # The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
 # <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
 # severity (or above) will be logged.
-__log_level=INFO
+__log_level=DEBUG
 # Appenders properties.
-__cons_appender=
+# This console tty descriptor number
 __file_appender=/tmp
+__cons_appender=
 # Additional appending options.
 __append_per_level=true
