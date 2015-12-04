@@ -1,0 +1,1068 @@
+#! /usr/bin/env sh
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 - E.de.Sars
+#@(#) All rights reserved.
+#@(#)
+#@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
+#@(#) provided these redistributions must retain the above copyright, this condition and the following
+#@(#) disclaimer.
+#@(#)
+#@(#) THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#@(#) WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+#@(#) FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE
+#@(#) FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+#@(#) PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTER-
+#@(#) -RUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+#@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#@(#)
+#@(#) This is cd2mpc version 13.0
+#@(#)
+#@(#) cd2mpc is a ripping tool designed for converting audio CDs into either musepack, flac or mp3. The
+#@(#) latest version can be found at: http://liealgebra.free.fr. Type cd2mpc --help for a full usage
+#@(#) information.
+
+VERSION=13.0
+
+E_SUCCESS=0
+E_FAILURE=1
+E_BADARGS=65
+E_SIG_INT=128
+#
+#
+## Shell libraries lookup
+# liblog4shell
+if [ -e "${SHELL_LIBRARY_PATH}/liblog4shell" ]; then
+   . ${SHELL_LIBRARY_PATH}/liblog4shell
+elif [ -e "${HOME}/libs4shell/liblog4shell" ]; then
+   . ${HOME}/libs4shell/liblog4shell
+else
+   printf "error :: liblog4shell not here, exiting\n"
+   exit ${E_FAILURE}
+fi
+# libopt4shell
+if [ -e "${SHELL_LIBRARY_PATH}/libopt4shell" ]; then
+   . ${SHELL_LIBRARY_PATH}/libopt4shell
+elif [ -e "${HOME}/libs4shell/libopt4shell" ]; then
+   . ${HOME}/libs4shell/libopt4shell
+else
+   printf "error :: libopt4shell not here, exiting\n"
+   exit ${E_FAILURE}
+fi
+#
+stty -echo 2>/dev/null
+#
+## Miscellaneous help functions
+pad () { printf "%02i" "${1#0}"; }
+is_like () { { printf "%s" "$1"|egrep -w "$2"; } >/dev/null 2>&1 ; }
+is_in () { egrep "$1" "$2" >/dev/null 2>&1 ; }
+strip_entry () { [ -e "$2" ] && perl -i -ne "print unless m;${1};" "$2"; }
+munge () { printf "%s" "$1"|sed -e "s/\/\{1,\}/_/g;s/@/_/g"|tr -d ";?[:cntrl:]"; }
+#
+#
+## Libopt4shell type interface.
+is_path () { [ -e "$1" -a -w "$1" -a "${1##*[ ]*}" ] || return ${E_FAILURE}; }
+is_binary () { type "$1" >/dev/null 2>&1 || return ${E_FAILURE}; }
+is_number () { is_like "$1" "^(0|[1-9][[:digit:]]{0,})(\.[[:digit:]]{1,}){0,1}$" || return ${E_FAILURE}; }
+is_integer () { is_like "$1" "^(0|[1-9][[:digit:]]{0,})$" || return ${E_FAILURE}; }
+#
+#
+## Options Management
+# Brief
+# Load input configuration file.
+load_config () {
+    if [ -e "$1" ]; then
+       logger_trace "Loading script configuration file ${1}"
+       . "$1"
+    fi
+}
+# Brief
+# Check options consistency.
+inspect_opts () {
+    DEBUGIN inspect_opts
+    local opt ext
+    #
+    if ! ${TRANSCODE}; then
+       if { ${INSPECT_MAXPROC} && opt=j; } ||\
+          { ${WITH_UNIX_PIPES} && opt=l; } ||\
+          { ${INSPECT_ENC_LST} && opt=e; } ||\
+          { ${INSPECT_OPUTYPE} &&\
+            case "$OPUTYPE" in single) opt=S;;
+                                    *) opt=B;;
+            esac
+          }                                ||\
+          { ${INSPECT_TAGMASK} && opt=n; }; then
+          logger_error "option '-${opt}' conflicts with '-X'"
+          return ${E_FAILURE}
+       fi
+    fi
+    #
+    mkdir -p "${DCACHE_DIR:=${HOME}/.cddbslave}" 2>/dev/null
+    if ! is_path "$DCACHE_DIR"; then
+       logger_error "couldn't stat created directory '${DCACHE_DIR}'"
+       return ${E_FAILURE}
+    fi
+    logger_info "Cache dir.: ${DCACHE_DIR}"
+    #
+    mkdir -p "$OPUTDIR" 2>/dev/null
+    if ! is_path "$OPUTDIR"; then
+       logger_error "couldn't stat created directory '${OPUTDIR}'"
+       return ${E_FAILURE}
+    fi
+    logger_info "Output dir.: ${OPUTDIR}"
+    #
+    if ! is_like "$CDEVICE" "/dev/(a{0,1}cd[[:digit:]]|cdrom)"; then
+       logger_error "couldn't sense device '${CDEVICE}'"
+       return ${E_FAILURE}
+    fi
+    logger_info "Cdrom device: ${CDEVICE}"
+    #
+    ${TRANSCODE} &&\
+    {
+      for ext in ${ENCODERS:=mpc}; do
+          case "$ext" in
+                mpc) if type mpcenc>/dev/null 2>&1; then
+                        logger_info "Musepack opts.: ${MPC_OPTS}"
+                     else
+                        logger_error "musepack encoder not found"
+                        return ${E_FAILURE}
+                     fi;;
+               flac) if type flac>/dev/null 2>&1; then
+                        logger_info "Flac opts.: ${FLAC_OPTS}"
+                     else
+                        logger_error "flac encoder not found"
+                        return ${E_FAILURE}
+                     fi;;
+                mp3) if type lame>/dev/null 2>&1; then
+                        logger_info "Lame opts.: ${MP3_OPTS}"
+                     else
+                        logger_error "lame encoder not found"
+                        return ${E_FAILURE}
+                     fi;;
+                  *) logger_error "unknown encoder/format '${ext}'"
+                     return ${E_FAILURE}
+                     ;;
+          esac
+      done
+      #
+      local rgxp sep="([[:blank:]]*([[:blank:]]|-|_)[[:blank:]]*)"
+      if [ "$OPUTYPE" = "single" ]; then
+         : ${TAGMASK:=${SINGLE_MASK:-%T - %A - %Y}}
+         rgxp="(%A|%T|%Y|%G)"
+      else
+         : ${TAGMASK:=${BATCH_MASK:-%N}}
+         rgxp="(%A|%T|%N|%Y|%G)"
+      fi
+      if ! is_like "$TAGMASK" "^${rgxp}(${sep}${rgxp})*$"; then
+         logger_error "couldn't parse naming mask '${TAGMASK}'"
+         return ${E_FAILURE}
+      fi
+      logger_info "Naming mask set to: '${TAGMASK}'"
+      #
+      if ! is_like "${WBEHAVE:=prompt}" "^(prompt|save|write)$"
+      then
+         logger_error "unknown overwriting mode '${WBEHAVE}'"
+         return ${E_FAILURE}
+      fi
+      logger_info "File overwrite behaviour: ${WBEHAVE}"
+      #
+      if ! is_like "$MAXPROC" "^[1-9][0-9]{0,1}$"; then
+         logger_error "numeric value expected for MAXPROC"
+         return ${E_FAILURE}
+      fi
+      logger_info "Max concurrent encoding jobs: ${MAXPROC}"
+    }
+    #
+    ${INSPECT_TMPLATE} || ${USE_LOCAL_CACHE}||\
+    {
+      if ! ${PING} -c4 ${SERVER:=freedb.org} >/dev/null 2>&1; then
+         logger_warn "couldn't reach cddb server '${SERVER}'"
+         #return ${E_FAILURE}
+      fi
+      logger_info "Cddb server: ${SERVER}"
+      #
+      if ! is_like "${PROTOCOL:=cddbp}" "^(http|cddbp|proxy)$"; then
+         logger_error "unknown cddb protocol '${PROTOCOL}'"
+         return ${E_FAILURE}
+      fi
+      logger_info "Cddb protocol: ${PROTOCOL}"
+      #
+      if ! is_like "${PORT:=8880}" "^[1-9][0-9]{2,3}$"; then
+         logger_error "numeric value expected for PORT"
+         return ${E_FAILURE}
+      fi
+      logger_info "Cddb port: ${PORT}"
+      #
+      if [ ! "$CDDB_VECTOR" ]; then
+         logger_error "CDDB_VECTOR not set in configuration"
+         return ${E_FAILURE}
+      fi
+      logger_info "Cddb category lookup: ${CDDB_VECTOR}"
+    }
+    DEBUGOUT inspect_opts ${E_SUCCESS}
+}
+#
+#
+## Initialization
+# Brief
+# Check if the sensed device is not being used and holds a readable disc.
+set_device () {
+    DEBUGIN set_device
+    if is_in "^${CDEVICE}" "$DEVICE_LOCK"; then
+       logger_error "'${CDEVICE}' currently being used, exiting"
+       return ${E_FAILURE}
+    elif ! ${CDID} ${CDEVICE} > "${CD2MPCTMPDIR}/info" 2>/dev/null; then
+       logger_error "no disc sensed using '${CDEVICE}'"
+       return ${E_FAILURE}
+    else
+       read CDISCID TCKCNT TCKOFFSETS < "${CD2MPCTMPDIR}/info"
+       logger_debug "registering device ${CDEVICE} as being used"
+       echo "${CDEVICE}_$$" >> "$DEVICE_LOCK"
+    fi
+    DEBUGOUT set_device ${E_SUCCESS}
+}
+# Brief
+# Configure cdparanoia options according to the processing mode.
+set_ripping_opts () { [ "$OPUTYPE" = "single" ] && WITH_UNIX_PIPES=true && RIPPER_OPTS="-d ${CDEVICE} -X" || RIPPER_OPTS="-d ${CDEVICE} -X -B"; }
+# Brief
+# Set the selection to the whole disc range if no selection argument is
+# specified.
+set_selection () {
+    DEBUGIN set_selection
+    local rgxp="^[1-9][0-9]{0,1}(,|,[1-9][0-9]{0,1}){0,1}$"
+    local width
+    if ! is_like "${SELECTN:=1,${TCKCNT}}" "$rgxp"; then
+       logger_error "bad selection format '$SELECTN'"
+       return ${E_FAILURE}
+    fi
+    X=${SELECTN%,*}; Y=${SELECTN#*,}; : ${Y:=${TCKCNT}}
+    if [ ${X} -le ${Y} -a ${Y} -le ${TCKCNT} ]; then
+       width=$((${Y} - ${X} + 1))
+       if [ ${MAXPROC} -gt ${width} ]; then
+          MAXPROC=${width}
+       fi
+    else
+       logger_error "bad selection format '$SELECTN'"
+       return ${E_FAILURE}
+    fi
+    DEBUGOUT set_selection ${E_SUCCESS}
+}
+# Brief
+# Configure the cddb client access mode.
+set_cddb_opts () {
+    CDDB_OPTS="-s ${SERVER} -P ${PROTOCOL}"
+    if [ "$PROTOCOL" != "proxy" ]; then
+       CDDB_OPTS="${CDDB_OPTS} -p ${PORT}"
+    fi
+    if ${USE_LOCAL_CACHE}; then
+       CDDB_OPTS="${CDDB_OPTS} -D${DCACHE_DIR} -c on"
+    else
+       CDDB_OPTS="${CDDB_OPTS} -c off"
+    fi
+}
+# Brief
+# Start the audio-cd discovery process.
+init () {
+    DEBUGIN init
+    if CD2MPCTMPDIR=$(umask 077 && mktemp -d "/tmp/cd2mpcXXXXXX" 2>/dev/null); then
+       set_device && set_ripping_opts && set_selection && set_cddb_opts
+    else
+      logger_error "failed to create temp. directory"
+      return ${E_FAILURE}
+    fi
+    DEBUGOUT init $?
+}
+#
+#
+## Cddb related functions
+# Brief
+# Add an new cddb entry in local cache.
+add_entry () {
+    DEBUGIN add_entry
+    local rgxp="TOTAL[[:blank:]]*.*\[\(.*\)\..*\].*/\1"
+    local length=$(${CDID} ${CDEVICE}|awk '{print $NF}') ||\
+    {
+      logger_error "couldn't get disc length"
+      return ${E_FAILURE}
+    }
+    CDTOC=$(${RIPPER} -d ${CDEVICE} -Q 2>&1) &&\
+    {
+      exec 3>&1 1> "$1"
+      echo \# xmcd CD database file
+      echo \#
+      echo \# Track frame offsets:
+      rgxp="^[[:blank:]]*[0-9]\{1,\}.*"
+      echo "$CDTOC"|sed -n "/${rgxp}/p"|awk '{print"#""\t"$4+150}'
+      echo \#
+      echo \# Disc length: ${length} seconds
+      echo \#
+      echo \# Revision: 0
+      echo \# Generated by cd2mpc v${VERSION}
+      echo \#
+      echo DISCID=${CDISCID}
+      echo DTITLE=${ARTIST} / ${ALBUM}
+      echo DYEAR=${YEAR}
+      echo DGENRE=${GENRE}
+      local i=0 title
+      while [ ${i} -lt ${TCKCNT} ]; do
+            title="TTITLE${i}"
+            i=$((${i} + 1))
+            echo "$title"="$(eval echo '$'TITLE_$(pad ${i}))"
+      done
+      echo EXTD=
+      i=0
+      while [ ${i} -lt ${TCKCNT} ]; do
+            echo EXTT${i}=
+            i=$((${i} + 1))
+      done
+      echo PLAYORDER=
+      echo .
+      exec 1>&3 3>&-
+    }
+    DEBUGOUT add_entry $?
+}
+# Brief
+# Reading cddb data from user file.
+set_template () {
+    logger_info "inspecting cddb file"
+    CDDBCAT=misc; CDDB_DATA="$(cat "$TMPLATE" 2>/dev/null)"
+    return ${E_SUCCESS}
+}
+# Brief
+# Retrieve disc info.
+# Write and stores a new cddb entry locally.
+get_info () {
+    DEBUGIN get_info
+    local rgxp="[[:blank:]]*\[\([0-9]\{2\}\)\][[:blank:]]*'\(.*\)'.*"
+    local file=${DCACHE_DIR}/${CDDBCAT}/${CDISCID}
+    exec 3>&1 1> "${CD2MPCTMPDIR}/info"
+    echo "$CDDB_DATA"|sed -n "s/^A.*:[[:blank:]]*\(.*\)/ARTIST=\"\1\"/p;
+                              s/^Y.*:[[:blank:]]*\(.*\)/YEAR=\"\1\"/p;
+                              s/^T.*:[[:blank:]]*\(.*\)/ALBUM=\"\1\"/p;
+                              s/^G.*:[[:blank:]]*\(.*\)/GENRE=\"\1\"/p;
+                              s/\"//g;s/${rgxp}/TITLE_\1=\"\2\"/p"
+    exec 1>&3 3>&-
+    if sed -n "/^.*=\"[[:blank:]]*\"$/p" "${CD2MPCTMPDIR}/info" >/dev/null 2>&1
+    then
+      . "${CD2MPCTMPDIR}/info" && ALBUMDIR=disc_${CDISCID}_${CDDBCAT} &&\
+      {
+        add_entry "$file" ||\
+        {
+          logger_error "couldn't write cddb entry ${file}"
+          return ${E_FAILURE}
+        }
+      }
+    else
+      logger_error "couldn't retrieve all disc info"
+      return ${E_FAILURE}
+    fi
+    DEBUGOUT get_info ${E_SUCCESS}
+}
+# Brief
+# Sort and display all cddb categories for which an entry having that
+# discid has been found.
+query () {
+    DEBUGIN query
+    logger_info "retrieving cddb info"
+    local rgxp cnt choices sel
+    #
+    local file=${DCACHE_DIR}/${CDDBCAT}/${CDISCID}
+    for CDDBCAT in ${CDDB_VECTOR}; do
+        rgxp=".*:[[:blank:]]*\(.*\)\n.*:[[:blank:]]*\(.*\)/\2\/\1 (${CDDBCAT})"
+        ${QUERY} ${CDDB_OPTS} read ${CDDBCAT} ${CDISCID}|sed "N;s/${rgxp}/;q"
+    done 2>/dev/null|sort -fu -k1,2 > "${CD2MPCTMPDIR}/info"
+    cnt=$(awk 'END {print NR}' "${CD2MPCTMPDIR}/info")
+    if [ ${cnt} -eq 0 ]; then
+       logger_info "no cddb entry found"
+       return ${E_FAILURE}
+    elif [ ${cnt} -ge 1 ]; then
+       choices="$(sed = "${CD2MPCTMPDIR}/info"|sed "N;s/\n/) /")"
+       logger_prompt "found ${cnt} CDDB entrie(s):" "$choices"
+       logger_prompt "[1-${cnt}]|q(quit)?"
+       #
+       while :; do read -r sel
+             case "$sel" in
+                  q|Q) logger_info "quiting..."
+                       return ${E_SUCCESS}   ;;
+             esac
+             if is_like "$sel" "^[1-${cnt}]$"; then
+                CDDBCAT="$(sed -n "${sel}s/.*(\(.*\))$/\1/p" "${CD2MPCTMPDIR}/info")"
+                CDDB_DATA="$(${QUERY} ${CDDB_OPTS} read ${CDDBCAT} ${CDISCID})"
+                logger_prompt "Entry details:" "$CDDB_DATA"
+                logger_prompt "Select option: u(use)|e(edit)|p(previous)|q(quit)?"
+                while :; do read -r sel
+                      case "$sel" in
+                           e|E) logger_info "opening buffer for edition..."
+                                EDIT_CDDB_ENTRY=true
+                                break 2                                             ;;
+                           p|P) logger_info "returning to menu: [1-${cnt}]|q(quit)?"
+                                continue 2                                          ;;
+                           u|U) logger_info "processing selected entry..."
+                                break 2                                             ;;
+                           q|Q) logger_info "quiting..."
+                                return ${E_FAILURE}                                 ;;
+                             *) logger_prompt "u(use)|e(edit)|p(previous)|q(quit)?" ;;
+                      esac
+                done
+             else
+                logger_prompt "[1-${cnt}]|q(quit)?"
+             fi
+       done
+    fi
+    #
+    ${QUERY} ${CDDB_OPTS} read ${CDDBCAT} ${CDISCID} 2>/dev/null > "${CD2MPCTMPDIR}/info" ||\
+    {
+      logger_error "failed to read cddb data"
+      return ${E_FAILURE}
+    }
+    #
+    if ${EDIT_CDDB_ENTRY}; then
+       sleep 2
+       ${EDITOR:-vi} "${CD2MPCTMPDIR}/info"
+    fi
+    #
+    CDDB_DATA="$(cat "${CD2MPCTMPDIR}/info")"
+    DEBUGOUT query ${E_SUCCESS}
+}
+#
+#
+##  Cuesheets management
+# Brief
+# Format names of files to encode.
+get_name () { eval echo $(echo "$TAGMASK"|sed "s/%A/\${ARTIST}/g;s/%T/\${ALBUM}/g;
+                               s/%N/\${TITLE}/g;s/%Y/\${YEAR}/g;s/%G/\${GENRE}/g")
+}
+# Brief
+# Generate embeded cuesheets.
+write_cue () {
+    DEBUGIN write_cue
+    local rgxp indexes x=${X} track
+    ${RIPPER} -d ${CDEVICE} -Q 2> "${CD2MPCTMPDIR}/img.cue" &&\
+    {
+      rgxp="^[[:blank:]]*[0-9]\{1,\}.*\[\(.*\)\.\(.*\)\].*/\1:\2"
+      indexes="$(sed -n "s/${rgxp}/p" "${CD2MPCTMPDIR}/img.cue" | sed '1 i\
+00:00:00
+')"
+      [ "$indexes" ] &&\
+      {
+        exec 3>&1 1> "${CD2MPCTMPDIR}/img.cue"
+        echo REM GENRE ${GENRE}
+        echo REM DATE ${YEAR}
+        echo REM CDISCID ${CDISCID}
+        echo REM COMMENT \"Generated by cd2mpc v${VERSION} using the flac encoder\"
+        echo PERFORMER \"${ARTIST}\"
+        echo TITLE \"${ALBUM}\"
+        echo FILE \"1-${Y}. $(get_name).flac\" WAVE
+        while [ ${x} -le ${Y} ]; do track=$(pad ${x})
+              echo "  "TRACK ${track} AUDIO
+              echo "    "TITLE \""$(eval echo '$'TITLE_${track})"\"
+              echo "    "PERFORMER \"${ARTIST}\"
+              echo "    "INDEX 01 "$(echo "$indexes"|sed -n "${x}p")"
+              x=$((${x} + 1))
+        done
+        exec 1>&3 3>&-
+      }
+    }
+    DEBUGOUT write_cue $?
+}
+#
+#
+## Encoding
+# Brief
+# Create the encoding location.
+make_album_dir () {
+    DEBUGIN make_album_dir
+    if ! mkdir -p "${OPUTDIR}/${ALBUMDIR}"; then
+       logger_error "could not create dir. ${ALBUMDIR}"
+       return ${E_FAILURE}
+    fi
+    DEBUGOUT make_album_dir ${E_SUCCESS}
+}
+# Brief
+# Encode to the input format while reading stdin.
+read_write () {
+    DEBUGIN read_write_${1}
+    ${RIPPER} ${RIPPER_OPTS} ${TRACK} - | eval wav2${1} "$2"
+    DEBUGOUT read_write_${1} $?
+}
+# Brief
+# Encode, in batch mode, cdparanoia data piped to stdin.
+fast_encode_batch () {
+    DEBUGIN fast_encode_batch
+    local ext process='read_write ${ext}' track=${X} name file="-"
+    ${EXTRA_VERBOSITY} || process="${process} >/dev/null 2>&1"
+    logger_info "writing to ${ALBUMDIR}"
+    while [ ${track} -le ${Y} ]; do
+          TRACK=$(pad ${track}); TITLE="$(eval echo '$'TITLE_${TRACK})"
+          name="$(munge "$(get_name)")"
+          for ext in ${ENCODERS}; do
+              OPUTNAME="${OPUTDIR}/${ALBUMDIR}/${TRACK}. ${name}.${ext}"
+              if [ -e "$OPUTNAME" ]; then
+                 case "$WBEHAVE" in
+                        save) logger_info "${OPUTNAME##*/} exists, skipping"
+                              continue                                                           ;;
+                      prompt) logger_prompt "${OPUTNAME##*/} exists: w(write)|s(skip)?"
+                              local ans
+                              while :; do read -r ans
+                                    case "$ans" in
+                                         w|W) logger_info "removing file ${OPUTNAME##*/}..."
+                                              rm -f "$OPUTNAME"
+                                              break                                              ;;
+                                         s|S) logger_info "skipping encoding of ${OPUTNAME##*/}..."
+                                              continue 2                                         ;;
+                                           *) logger_prompt "w(write)|s(save)?"                  ;;
+                                    esac
+                              done                                                               ;;
+                 esac
+              fi
+              logger_info "encoding track(s) ${track} to ${ext}"
+              echo "$OPUTNAME" > "${CD2MPCTMPDIR}/file" &&\
+              {
+                if ! eval ${process} "$file"; then
+                   logger_fatal "i/o failure"
+                   return ${E_FAILURE}
+                fi
+              } && rm -f "${CD2MPCTMPDIR}/file"
+              logger_info "[${track} to ${ext}] done."
+          done
+          track=$((${track} + 1))
+    done
+    DEBUGOUT fast_encode_batch ${E_SUCCESS}
+}
+# Brief
+# Encodes in single mode, cdparanoia data piped to stdin.
+fast_encode_single () {
+    DEBUGIN fast_encode_single
+    local ext process='read_write ${ext}' name file="-"
+    ${EXTRA_VERBOSITY} || process="${process} >/dev/null 2>&1"
+    TRACK="${X}-${Y}"; TITLE="Album Image ${TRACK}"
+    name="$(munge "$(get_name)")"
+    logger_info "writing to ${ALBUMDIR}"
+    for ext in ${ENCODERS}; do
+        OPUTNAME="${OPUTDIR}/${ALBUMDIR}/${TRACK}. ${name}.${ext}"
+        if [ -e "$OPUTNAME" ]; then
+           case "$WBEHAVE" in
+                  save) logger_info "${OPUTNAME##*/} exists, skipping"
+                        continue                                                           ;;
+                prompt) logger_prompt "${OPUTNAME##*/} exists: w(write)|s(skip)?"
+                        local ans
+                        while :; do read -r ans
+                              case "$ans" in
+                                   w|W) logger_info "removing file ${OPUTNAME##*/}..."
+                                        rm -f "$OPUTNAME"
+                                        break                                              ;;
+                                   s|S) logger_info "skipping encoding of ${OPUTNAME##*/}..."
+                                        continue 2                                         ;;
+                                     *) logger_prompt "w(write)|s(save)?"                  ;;
+                              esac
+                        done                                                               ;;
+           esac
+        fi
+        logger_info "encoding track(s) ${TRACK} to ${ext}"
+        echo "$OPUTNAME" > "${CD2MPCTMPDIR}/file" &&\
+        {
+          if [ "$ext" = "flac" -a ${X} -eq 1 ]; then
+             if write_cue; then
+                FLAC_OPTS="${FLAC_OPTS} --cuesheet=${CD2MPCTMPDIR}/img.cue"
+             else
+                logger_error "cuesheet i/o"
+                return ${E_FAILURE}
+             fi
+          fi
+          if ! eval ${process} "$file"; then
+             logger_fatal "i/o failure"
+             return ${E_FAILURE}
+          fi
+          if [ -e "${CD2MPCTMPDIR}/img.cue" ]; then
+             mv "${CD2MPCTMPDIR}/img.cue" "${OPUTDIR}/${ALBUMDIR}"
+          fi
+        } && rm -f "${CD2MPCTMPDIR}/file"
+        logger_info "[${TRACK} to ${ext}] done."
+    done
+    DEBUGOUT fast_encode_single ${E_SUCCESS}
+}
+# Brief
+# Check whether an i/o error occured.
+has_io_err () {
+    local b=${E_FAILURE}
+    if [ -e "${CD2MPCTMPDIR}/lock" ]; then
+       logger_fatal "i/o failure"
+       wait 2>/dev/null
+       b=${E_SUCCESS}
+    fi
+    return ${b}
+}
+# Brief
+# Transcode each selected track into the selected formats.
+encode () {
+    DEBUGIN encode
+    local ext process='wav2${ext}' hash track wave name list pid ne=0
+    local end=${ENCODERS##*[ ]} last=$(awk 'END {print $0}' "$HASH")
+    ${EXTRA_VERBOSITY} || process="${process} >/dev/null 2>&1"
+    logger_info "writing to ${ALBUMDIR}"
+    exec 3>&1
+    while read hash; do
+          TRACK=${hash%%@*}; track=${TRACK#0}
+          if [ ${track} -ge ${X} -a ${track} -le ${Y} ]; then
+             TITLE="$(eval echo '$'TITLE_${TRACK})"; wave="${hash##*@}"
+             name="$(munge "$(get_name)")"
+             for ext in ${ENCODERS}; do
+                 OPUTNAME="${OPUTDIR}/${ALBUMDIR}/${TRACK}. ${name}.${ext}"
+                 if [ -e "$OPUTNAME" ]; then
+                    case "$WBEHAVE" in
+                           save) logger_info "${OPUTNAME##*/} exists, skipping"
+                                 continue                                                           ;;
+                         prompt) logger_prompt "${OPUTNAME##*/} exists: w(write)|s(skip)?"
+                                 local ans
+                                 while :; do read -r ans <&3
+                                       case "$ans" in
+                                            w|W) logger_info "removing file ${OPUTNAME##*/}..."
+                                                 rm -f "$OPUTNAME"
+                                                 break                                              ;;
+                                            s|S) logger_info "skipping encoding of ${OPUTNAME##*/}..."
+                                                 continue 2                                         ;;
+                                              *) logger_prompt "w(write)|s(save)?"                  ;;
+                                       esac
+                                 done                                                               ;;
+                    esac
+                 fi
+                 logger_info "encoding track ${track} to ${ext}"
+                 (
+                   if eval ${process} "$wave"; then
+                      logger_info "[${track} to ${ext}] done."
+                      if [ "$ext" = "$end" ]; then
+                         update_context ${TRACK}
+                         rm -f "$wave"
+                      fi
+                   else
+                      ${TOUCH} "${CD2MPCTMPDIR}/lock"
+                   fi
+                 )&
+                 has_io_err && return ${E_FAILURE}
+                 [ ! "$list" ] && list="$!" || list="${list} ${!}"
+                 ne=$((${ne} + 1))
+                 if [ "$hash" = "$last" ] && [ "$ext" = "$end" ]
+                 then
+                    wait 2>/dev/null
+                 elif [ ${ne} -ge ${MAXPROC} ]
+                 then
+                      for pid in ${list}
+                      do
+                          list="${list#*[ ]}"
+                          if wait ${pid} 2>/dev/null
+                          then
+                             has_io_err && return ${E_FAILURE}
+                             break
+                          fi
+                      done
+                 fi
+             done
+          fi
+    done < "$HASH"; exec 3>&-
+    DEBUGOUT encode ${E_SUCCESS}
+}
+# Brief
+# Generate a m3u playlist.
+m3ulist () {
+    DEBUGIN m3ulist
+    local ext file dir=${OPUTDIR}/${ALBUMDIR}
+    if ${CREATE_PLAYLIST}; then
+       if [ "$OPUTYPE" = "batch" ]; then
+          for ext in ${ENCODERS}; do
+              for file in ${dir}/[0-9][0-9]*.${ext}
+              do
+                  if [ -e "$file" ]; then
+                     printf "%s\n" "${file##*/}"
+                  fi
+              done >${dir}/${ALBUMDIR}.${ext}.m3u
+          done
+       fi
+    fi 2>/dev/null
+    DEBUGOUT m3ulist ${E_SUCCESS}
+}
+#
+#
+# Extracting
+# Brief
+# Create the extraction location.
+make_extract_dir () {
+    DEBUGIN make_extract_dir
+    ENTRY_DIR=${OPUTDIR}/.cd2mpc_${CDISCID}
+    WAVE_DIR=${ENTRY_DIR}/${CDDBCAT}
+    HASH=${WAVE_DIR}/hash
+    mkdir -p "$WAVE_DIR"
+    DEBUGOUT make_extract_dir $?
+}
+# Brief
+# Format hash prints
+fsum () { cksum "$1"|sed "s/.*\([0-9]\{2\}\)\.cdda.wav$/\1 &/;s/ /@/g"; }
+# Brief
+# Report the checksum of wave files living in the extraction directory.
+# The resulting hash file is then used to identify tracks to process at
+# encoding time.
+init_context () {
+    DEBUGIN init_context
+    local hash track wave
+    if [ -s "$HASH" ]; then
+       exec 3>&1
+       while read hash; do
+             ptrack=${hash%%@*}; wave=${hash##*@}
+             if [ ${ptrack#0} -ge ${X} -a ${ptrack#0} -le ${Y} ]; then
+                if [ -e "$wave" ] && [ "$hash" = "$(fsum "$wave")" ]; then
+                   case "$WBEHAVE" in
+                         save) logger_info "${wave##*/} exists, skipping"
+                               continue                                                      ;;
+                       prompt) logger_prompt "${wave##*/} exists: w(write)|s(save)?"
+                               local ans
+                               while :; do read -r ans <&3
+                                     case "$ans" in
+                                          w|W) logger_info "removing file ${wave##*/}..."
+                                               strip_entry "^${ptrack}" "$HASH"
+                                               rm -f "$wave"
+                                               break                                         ;;
+                                          s|S) logger_info "skipping ripping of ${wave##*/}..."
+                                               break                                         ;;
+                                            *) logger_prompt "w(write)|s(save)?"             ;;
+                                     esac
+                               done                                                          ;;
+                        write) strip_entry "^${ptrack}" "$HASH"
+                               rm -f "$wave"                                                 ;;
+                   esac
+                else
+                   strip_entry "^${ptrack}" "$HASH"
+                   rm -f "$wave"
+                fi
+             fi
+       done < "$HASH"; exec 3>&-
+    fi
+    DEBUGOUT init_context ${E_SUCCESS}
+}
+# Brief
+# Remove the input track hash from the hash file and the session
+# ripping directory if necessary.
+update_context () {
+    DEBUGIN update_context
+    local cat no_more_entry=true
+    strip_entry "^${1}" "$HASH"
+    if [ ! -s "$HASH" ]; then
+       rm -rf "$WAVE_DIR" 2>/dev/null
+       for cat in ${GENRES_LIST}; do
+           if [ -e "${ENTRY_DIR}/${cat}" ]
+           then
+              no_more_entry=false
+              break
+           fi
+       done
+       if ${no_more_entry}
+       then
+          rm -rf "$ENTRY_DIR"
+       fi
+    fi
+    DEBUGOUT update_context ${E_SUCCESS}
+}
+# Brief
+# Extract the user selection (batch mode).
+extract () {
+    DEBUGIN extract
+    local process="${RIPPER} ${RIPPER_OPTS}" track=${X} wave
+    ${EXTRA_VERBOSITY} || process="${process} >/dev/null 2>&1"
+    while [ ${track} -le ${Y} ]; do
+          wave="${WAVE_DIR}/track$(pad ${track}).cdda.wav"
+          if [ ! -e "$wave" ]; then
+             logger_info "ripping track ${track}"
+             (
+               if eval ${process} ${track} "${WAVE_DIR}/"; then
+                  fsum "$wave" >> "$HASH"
+                  logger_info "[${track}] done."
+               else
+                  ${TOUCH} "${CD2MPCTMPDIR}/lock"
+               fi
+             )&
+             wait 2>/dev/null
+             has_io_err && return ${E_FAILURE}
+             track=$((${track} + 1))
+          elif is_in "^$(pad ${track})" "$HASH"; then
+             track=$((${track} + 1))
+          else
+             rm -f "$wave"
+          fi
+    done
+    DEBUGOUT extract ${E_SUCCESS}
+}
+# Brief
+# Remove cd from tray.
+eject_cd () {
+    DEBUGIN eject_cd
+    ${EJECT_FROM_TRAY} && ${EJECT} -f ${CDEVICE}
+    DEBUGOUT eject_cd ${E_SUCCESS}
+}
+# Brief
+# Start the ripping process.
+rip () {
+    DEBUGIN rip
+    make_extract_dir && init_context && extract && eject_cd || return ${E_FAILURE}
+    DEBUGOUT rip ${E_SUCCESS}
+}
+#
+#
+## Events handlers
+# Brief
+# Release stty echo as well as cdrom-drive lock.
+release_locks () {
+    DEBUGIN release_locks
+    stty echo 2>/dev/null
+    if strip_entry "^${CDEVICE}_$$$" "$DEVICE_LOCK"; then
+       if [ ! -s "$DEVICE_LOCK" ]; then
+          rm -f "$DEVICE_LOCK"
+       fi
+    fi
+    DEBUGOUT release_locks ${E_SUCCESS}
+}
+# Brief
+# Control user interruptions.
+upon_interrupt () {
+    DEBUGIN upon_interrupt
+    local file
+    if ${__catch_sig:=true}; then
+      logger_error "aborting..."
+      wait
+      if [ -e "${CD2MPCTMPDIR}/file" ]; then
+         read file < "${CD2MPCTMPDIR}/file"
+         rm -f "$file"
+      fi
+      __catch_sig=false
+    fi 2>/dev/null
+    DEBUGOUT upon_interrupt ${E_SIG_INT}
+}
+#
+#
+## Standalone actions
+# Brief
+# Print version information.
+print_info () {
+cat <<version
+
+This is ${CD2MPC} v${VERSION}.
+cd2mpc is a shell script utility capable of audio extraction, batch
+or single conversion/tagging using either musepack(mpc), flac(flac)
+or mp3(lame). It handles multiple formats conversion, parallelized
+encoding as well as encoding on the fly. At last, embeded cuesheets
+are generated when producing flac images.
+
+Example:
+       cd2mpc --encoder flac,mp3 --low-disk-use --selection=1,5
+
+Type ${CD2MPC} -h or ${CD2MPC} --help for the usage information.
+
+version
+}
+# Brief
+# Remove stored links (cddb entries) in the cache directory.
+flush_cache () {
+    DEBUGIN flush_cache
+    local discid="$1" entry
+    if [ -e "$DCACHE_DIR" ]; then
+       set -- ${DCACHE_DIR}/*/[a-z0-9][a-z0-9]*
+       if [ -e "$1" ]; then
+          if [ "$discid" ]; then
+             for entry in ${@}; do
+                 if [ "${entry##*/}" = "$discid" ]; then
+                    logger_info "removing cached entry ${entry#*/}"
+                    rm -f "$entry"
+                 fi
+             done
+          else
+             logger_info "removing cached entries (${#})"
+             rm -f "$@"
+          fi
+       fi
+    fi
+    DEBUGOUT flush_cache $?
+}
+#
+#
+## Specific encoding related functions
+# Brief
+# Encode the input wave file into mpc(musepack) and set tags using
+# ape v2.0.
+wav2mpc () {
+    DEBUGIN wav2mpc
+   mpcenc ${MPC_OPTS} --overwrite\
+ --tag album="${ALBUM}"\
+ --tag artist="${ARTIST}"\
+ --tag title="${TITLE}"\
+ --tag track="${TRACK#0}"\
+ --tag genre="${GENRE}"\
+ --tag year="${YEAR}"\
+ --tag comment="Produced with cd2mpc v${VERSION} using the musepack encoder"\
+ "$1"\
+ "$OPUTNAME"
+    DEBUGOUT wav2mpc $?
+}
+# Brief
+# Encode the input wave file into flac and set tags using ape v2.0.
+wav2flac () {
+    DEBUGIN wav2flac
+    flac ${FLAC_OPTS} --force\
+ --tag="ALBUM=${ALBUM}"\
+ --tag="ARTIST=${ARTIST}"\
+ --tag="TITLE=${TITLE}"\
+ --tag="TRACKNUMBER=${TRACK#0}"\
+ --tag="GENRE=${GENRE}"\
+ --tag="DATE=${YEAR}"\
+ --tag="COMMENT=Produced with cd2mpc v${VERSION} using the flac encoder"\
+ "$1"\
+ --output-name "$OPUTNAME"
+    DEBUGOUT wav2flac $?
+}
+# Brief
+# Encode the input wave file into mp3 and set tags using id3(v2).
+wav2mp3 () {
+    DEBUGIN wav2mp3
+    lame ${MP3_OPTS}\
+ --tl "$ALBUM"\
+ --ta "$ARTIST"\
+ --tt "$TITLE"\
+ --tn "${TRACK#0}"\
+ --tg "$GENRE"\
+ --ty "$YEAR"\
+ --tc "Produced with cd2mpc v${VERSION} using the lame encoder"\
+ "$1"\
+ "$OPUTNAME"
+    DEBUGOUT wav2mp3 $?
+}
+#
+#
+## Env. initialization
+CD2MPC="${0##*/}"
+CDDB_VECTOR='folk jazz misc rock country blues newage reggae classical soundtrack'
+CDEVICE=/dev/acd0
+CDID=cd-discid
+CREATE_PLAYLIST=true
+DCACHE_DIR=${HOME}/.cddbslave
+DEVICE_LOCK=${HOME}/.device.lock
+EDIT_CDDB_ENTRY=false
+EJECT=eject
+EJECT_FROM_TRAY=false
+ENCODERS=mpc
+EXTRA_VERBOSITY=false
+GENRES_LIST="$CDDB_VECTOR"
+INSPECT_CDEVICE=false
+INSPECT_ENC_LST=false
+INSPECT_MAXPROC=false
+INSPECT_OPUTYPE=false
+INSPECT_TAGMASK=false
+INSPECT_TMPLATE=false
+MAXPROC=1
+OPUTDIR=${HOME}/encodes
+OPUTYPE=batch
+PING=ping
+PORT=8880
+PROTOCOL=cddbp
+QUERY=cddb_query
+RIPPER=cdparanoia
+SELECTN=1,
+SERVER=freedb.org
+TAGMASK=
+TMPLATE=
+TOUCH=touch
+TRANSCODE=true
+USE_LOCAL_CACHE=false
+WBEHAVE=prompt
+WITH_UNIX_PIPES=false
+#
+#
+## Set traps
+trap 'upon_interrupt; exit' TERM INT QUIT
+trap 'release_locks && rm -rf "$CD2MPCTMPDIR"' EXIT
+
+## Parse options
+[ -e ~/.cd2mpcrc ] && . ~/.cd2mpcrc
+while argp_parse /shrt-opts="uj:Ew:Xs:ld:t:c:e:::o:f::BSh::n:Vv"\
+                 /long-opts="u:use-local-cddb:0:Use cache only when querying cddb
+                             j:max-proc:1@integer:Specify max allowed encoding processes
+                             E:eject:0:Eject cd from tray when done
+                             w:over-existing:1:Specify over-writing mode: <save,prompt,write>
+                             X:extract:0:Just extract tracks in batch mode
+                             s:selection:1:Select a coma separated track range
+                             l:low-disk-use:0:Minimize disk i/o and space used
+                             d:device:1:Specify a preferred cdrom device
+                             t:template:1@path:Specify a CDDB template
+                             c:config:1@path:Select an alternate configuration file
+                             e:encoder:3:Specify encoding formats: <mpc,flac,mp3>
+                             o:oputdir:1:Set the output sound directory
+                             f:flush:2:Flush cddb cache entries and exit
+                             B:batch:0:Encode in separate files
+                             S:single:0:Encode in a single file
+                             n:naming-mask:1:Specify the naming mask to use
+                             V:verbose:0:Increase log verbosity
+                             h:help:2:Print help information and exit
+                             v:version:0:Print script information and exit
+"\
+                 /long-only "$@"
+do
+      case "$_opt" in
+         u) USE_LOCAL_CACHE=true           ;;
+         j) MAXPROC="$_optarg"
+            INSPECT_MAXPROC=true           ;;
+         E) EJECT_FROM_TRAY=true           ;;
+         w) WBEHAVE="$_optarg"             ;;
+         X) TRANSCODE=false                ;;
+         e) ENCODERS="$_optarg"
+            INSPECT_ENC_LST=true           ;;
+         s) SELECTN="$_optarg"             ;;
+         l) WITH_UNIX_PIPES=true           ;;
+         t) TMPLATE="$_optarg"
+            INSPECT_TMPLATE=true           ;;
+         c) load_config "$_optarg"         ;;
+         d) CDEVICE="$_optarg"             ;;
+         o) OPUTDIR="$_optarg"             ;;
+         f) flush_cache "$_optarg"
+            exit ${E_SUCCESS}              ;;
+         B) OPUTYPE="batch"
+            INSPECT_OPUTYPE=true           ;;
+         S) OPUTYPE="single"
+            INSPECT_OPUTYPE=true           ;;
+         n) TAGMASK="$_optarg"
+            INSPECT_TAGMASK=true           ;;
+         V) EXTRA_VERBOSITY=true           ;;
+         h) get_help "$_optarg"
+            exit ${E_SUCCESS}              ;;
+         v) print_info
+            exit ${E_SUCCESS}              ;;
+     \?|\:) exit ${E_BADARGS}              ;;
+      esac
+done
+
+if [ ${_optindex} -ne 0 ]; then
+   shift $((${_optindex} - 1))
+fi
+
+# Inspect options
+inspect_opts || exit ${E_FAILURE}
+
+# Main logic
+init &&\
+{
+  if ${INSPECT_TMPLATE}; then
+     set_template
+  else
+     query
+  fi
+} && get_info &&\
+{
+  if ${TRANSCODE}; then
+     if ! make_album_dir; then
+        exit ${E_FAILURE}
+     elif ${WITH_UNIX_PIPES}; then
+        if ! eval fast_encode_${OPUTYPE}; then
+           exit ${E_FAILURE}
+        fi
+     elif ! { rip && encode; }; then
+        exit ${E_FAILURE}
+     fi
+     m3ulist
+  else
+     rip
+  fi
+}
+exit $?

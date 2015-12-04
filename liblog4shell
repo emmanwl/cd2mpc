@@ -1,0 +1,316 @@
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 - E.de.Sars
+#@(#) All rights reserved.
+#@(#)
+#@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
+#@(#) provided these redistributions must retain the above copyright, this condition and the following
+#@(#) disclaimer.
+#@(#)
+#@(#) THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#@(#) WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+#@(#) FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE
+#@(#) FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+#@(#) PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTER-
+#@(#) -RUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+#@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#@(#)
+#@(#) This is liblog4shell, a shell script library inspired by log4j. To use it from an external shell
+#@(#) script or a function library, simply source it.
+#
+#
+#
+#
+# Caller shell name
+__shell="${0##*/}"
+#
+# The standard output pattern layout is used to format each logger
+# entry. This parameter must be made of a subset of the following
+# specifiers shipped with a leading '%':
+# - L (the logger level)
+# - D (the logging timestamp "Y-m-d hour:min:sec")
+# - F (the file where the logging event occurred)
+# - N (the logging counter)
+# - H (the hostname)
+# - M (the message)
+# - P (the pid of the current process)
+# - T (a brief stack trace)
+# - % (the literal percent sign '%')
+# The N specifier can be prefixed with a zero-padding indicator
+# so the required number of leading zeros will be added.
+__pattern=
+# Brief
+# Zero-pad logger entries.
+_pad () { printf "%0${1}i" "$2"; }
+# Brief
+# Inject in the pattern layout itself any error regarding
+# an unrecognized specifier.
+_err () { printf "%s" "illegal format symbol ${1}"; }
+# Logger statistics.
+__entries=0
+# Place to hold stack trace in.
+__stack_trace=
+# Brief
+# Configure the pattern layout.
+__set_pattern_layout () {
+    local token tok_sep expr _fmt="+%Y-%d-%m %H:%M:%S" b
+    __pattern=
+    for token in ${@}; do
+        tok_sep=" "
+        while [ ${#token} -gt 0 ]; do
+              case "$token" in
+                   %*) token="${token#%}"
+                       case "$token" in
+                             L*) expr="@{level}"                     ;;
+                             D*) expr="@(date '${_fmt}')"            ;;
+                             F*) expr="${__shell}"                   ;;
+                            *N*) b=${token%%N*}; token=${token#${b}}
+                                 expr="@(_pad ${b:-0} @{__entries})" ;;
+                             H*) expr="$(hostname)"                  ;;
+                             M*) expr="%s"                           ;;
+                             P*) expr=$$                             ;;
+                             T*) expr="@{__stack_trace}"             ;;
+                             %*) expr="%%"                           ;;
+                              *) expr=$(_err "${token%%${token#?}}") ;;
+                       esac
+                       token="${token#?}"                            ;;
+                    *) expr="${token%%${token#?}}"
+                       case "$expr" in \)|\(|\|)
+                            expr="'${expr}'"                         ;;
+                       esac
+                       token="${token#?}"                            ;;
+              esac
+              if [ "$__pattern" ]; then
+                 __pattern="${__pattern}${tok_sep}${expr}"
+              else
+                 __pattern="$expr"
+              fi
+              tok_sep=""
+        done
+    done
+    if [ "$__pattern" ]; then
+       __pattern="$(printf "%s" "$__pattern"|sed "s/@/$/g")"
+    else
+       __pattern="%s"
+    fi
+}
+#
+# The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
+# <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
+# severity (or above) will be logged.
+__log_level=3
+# Brief
+# Set log level.
+set_log_level () {
+    case "$1" in
+         [1-6]) __log_level=${1} ;; TRACE) __log_level=1  ;;
+         DEBUG) __log_level=2    ;;  INFO) __log_level=3  ;;
+          WARN) __log_level=4    ;; ERROR) __log_level=5  ;;
+         FATAL) __log_level=6    ;;     *) __log_level=3  ;;
+    esac
+}
+# Null appender
+__null_appender=/dev/null
+# File appenders
+__file_appender=${__null_appender}
+__append_per_level=false
+# Console appender
+__cons_appender=${__null_appender}
+# Brief
+# Configure appenders properties.
+__set_file_appender () {
+    if [ "$__file_appender" -a "$__file_appender" != "$__null_appender" ]; then
+       if [ ! "${__file_appender##*/}" ]; then
+          if [ -d "$__file_appender" -a -w "$__file_appender" ]; then
+             __file_appender=${__file_appender}/${__shell}.log
+          else
+             __file_appender=${__null_appender}
+          fi
+       elif [ ! "${__file_appender##*/*}" ]; then
+          if [ -d "$__file_appender" -a -w "$__file_appender" ]; then
+             __file_appender=${__file_appender}/${__shell}.log
+          elif [ ! -d "/${__file_appender%/*}" -o ! -w "/${__file_appender%/*}" ]; then
+             __file_appender=${__null_appender}
+          fi
+       elif [ ! -w "." ]; then
+          __file_appender=${__null_appender}
+       elif [ "${__file_appender%%*.log}" ]; then
+          __file_appender=${__file_appender}.log
+       fi
+    else
+       __file_appender=${__null_appender}
+    fi
+}
+#
+__set_cons_appender () {
+    local term=$(tty)
+    if [ "$__cons_appender" -a "$__cons_appender" != "$__null_appender" ]; then
+       if [ -e "${term%/*}/${__cons_appender}" -a "$__cons_appender" != "${term##*/}" ]
+       then
+          __cons_appender=${term%/*}/${__cons_appender}
+       else
+          __cons_appender=${__null_appender}
+       fi
+    else
+       __cons_appender=${__null_appender}
+    fi
+}
+# Brief
+# Append to the selected file.
+__append_to_file () {
+    local l="$1" f=${__file_appender}
+    if [ "$f" != "$__null_appender" ]; then
+       if ${__append_per_level} && [ "$l" != "PROMPT" ]
+       then
+          tee -a "$f" "${f}.${l}"
+       else
+          tee -a "$f"
+       fi
+    else
+       tee -a "$f"
+    fi 2>/dev/null
+}
+# Brief
+# Colorize output according to
+# the input log level.
+__colorize () {
+    local esc=$(printf "\033"); sed "s/.*/${esc}[$(eval echo '$'__${1}_color)m&${esc}[0m/g"
+}
+# Brief
+# Append to the selected console.
+__append_to_cons () {
+    tee -a "$__cons_appender" 2>/dev/null
+}
+# Brief
+# Main append function.
+__append () {
+    __append_to_file "$1"|__colorize "$1"|__append_to_cons
+}
+# Brief
+# Report the input message before piping it to file appender(s).
+__logger () {
+    local level="$1" message="$2" format line size=0
+    shift 2
+    __entries=$((${__entries} + 1))
+    while :; do case "$message" in \\n*) message="${message#\\n}" ;;
+                                   *\\n) message="${message%\\n}" ;;
+                                      *) break                    ;;
+                esac
+    done
+    if [ ${#} -gt 0 ]; then
+       printf "$(eval echo ${__pattern})\n%s\n" "$message" "$*"
+    else
+       printf "$(eval echo ${__pattern})\n" "$message"
+    fi | __append "$level"
+}
+# Brief
+# Prompt level logger.
+__PROMPT_color=35
+logger_prompt () {
+    __logger "PROMPT" "$@"
+}
+# Brief
+# Trace level logger.
+__TRACE_color=30
+logger_trace  () {
+    if [ ${__log_level} -eq 1 ]; then
+       __logger "TRACE" "$@"
+    fi
+}
+# Brief
+# Debug level logger.
+__DEBUG_color=32
+logger_debug  () {
+    if [ ${__log_level} -le 2 ]; then
+       __logger "DEBUG" "$@"
+    fi
+}
+# Brief
+# Info level logger.
+__INFO_color=34
+logger_info   () {
+    if [ ${__log_level} -le 3 ]; then
+       __logger "INFO" "$@"
+    fi
+}
+# Brief
+# Warn level logger.
+__WARN_color=35
+logger_warn   () {
+    if [ ${__log_level} -le 4 ]; then
+       __logger "WARN" "$@"
+    fi
+}
+# Brief
+# Error level logger.
+__ERROR_color=31
+logger_error  () {
+    if [ ${__log_level} -le 5 ]; then
+       __logger "ERROR" "$@"
+    fi
+}
+# Brief
+# Fatal level logger.
+__FATAL_color=31
+logger_fatal  () {
+    if [ ${__log_level} -le 6 ]; then
+       __logger "FATAL" "$@"
+    fi
+}
+# Brief
+# Stack trace in.
+DEBUGIN () {
+    logger_trace "<< [$1]"
+    if [ "$__stack_trace" ]; then
+       __stack_trace="${__stack_trace} << ${1}"
+    else
+       __stack_trace="${1}"
+    fi
+}
+# Brief
+# Stack trace out.
+DEBUGOUT () {
+    logger_trace ">> [$1]"
+    return "$2"
+}
+# Brief
+# Write default config.
+__write_config () {
+cat <<__config_here_document > ~/.log4shell.cf
+# Default log4shell configuration file.
+# The standard output pattern layout is used to format each logger
+# entry. This parameter must be made of a subset of the following
+# specifiers shipped with a leading '%':
+# - L (the logger level)
+# - D (the logging timestamp "y-m-d hour(24):min:sec")
+# - F (the file where the logging event occurred)
+# - N (the logging counter)
+# - H (the hostname)
+# - M (the message)
+# - P (the pid of the current process)
+# - T (a brief stack trace)
+# - % (the literal percent sign '%')
+# The N specifier can be prefixed with a zero-padding indicator
+# so the required number of leading zeros will be added.
+__pattern="%D,%5N - {%H} - [%L] - %F | %M"
+# The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
+# <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
+# severity (or above) will be logged.
+__log_level=DEBUG
+# Appenders properties
+__cons_appender=
+__file_appender=/tmp
+# Append logs per level: <true,false>
+__append_per_level=true
+
+__config_here_document
+}
+#
+# Read configuration.
+if [ ! -e ~/.log4shell.cf ]; then
+   __write_config
+fi
+. ~/.log4shell.cf
+__set_pattern_layout "$__pattern"
+set_log_level "$__log_level"
+__set_file_appender
+__set_cons_appender

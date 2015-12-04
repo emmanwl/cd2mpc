@@ -1,0 +1,709 @@
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 - E.de.Sars
+#@(#) All rights reserved.
+#@(#)
+#@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
+#@(#) provided these redistributions must retain the above copyright, this condition and the following
+#@(#) disclaimer.
+#@(#)
+#@(#) THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#@(#) WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+#@(#) FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE
+#@(#) FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+#@(#) PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTER-
+#@(#) -RUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+#@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#@(#)
+#@(#) This is libopt4shell, a shell library which automates the parsing of command line parameters.
+#@(#) That api handles long and short options style, options abbreviations, bundling, multiple opt.
+#@(#) argument specification as well as argument type checking.
+#@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero. To use it from an external shell
+#@(#) script or a function library, simply source it.
+#
+# Caller shell name
+__shell="${0##*/}"
+# Parser shell name
+__parser=argp_parse
+# ${_optstring} points to the set of options, single characters, which
+# require a single leading dash.
+# This string is the concatenation of alphanumeric option characters,
+# each of them being followed by at most three colons (`:'), see the
+# ${__shrt_rgxp} description.
+# Given any option character:
+# - if bundled with no colon, the matched option doesn't allow an
+#   argument
+# - if bundled with exactly one colon, the matched option requires
+#   an argument
+# - if bundled with exactly two colons, the matched option can be
+#   provided with an optional argument
+# - if bundled with three colons, the option must be provided with
+#   at least one argument; additional ones being specified with a
+#   a leading space character.
+_optstring=
+__shrt_rgxp="^(([A-Z0-9a-z]|[0-9]){1,}:{0,3}){1,}$"
+# Brief
+# Check whether the first positional parameter is a match for the
+# regular expression that follows.
+__is_of_match () { printf "%s" "$1"|egrep -w "$2" >/dev/null 2>&1; }
+#
+# ${_long_opts} points to the set of options strings requiring a double
+# leading dash.
+# This list of colon separated values provide a complete description of
+# long and short options, see the ${__long_rgxp} description.
+# Each line is the concatenation of an option code, a colon, a long name
+# for that option code, a colon, the option argument count in the range
+# [0-3], a colon and the description text itself.
+#
+# If the option code matches an option character in ${_optstring}, it
+# stands for a synonym of the long option. If not, the associated long
+# name must not be left empty.
+#
+# On the contrary, if that long name is left empty, its option code is
+# expected to be an option character.
+#
+# If the option code matches an option character, the associated argument
+# mandatoriness count must be equal to the number of colons bundled with
+# that character in ${_optstring}.
+#
+# Optionally, if the option argument count is greater than or equal to 1,
+# it can be shipped with a type specification in the form "@<type>" to
+# let argp_parse check the type of the associated arguments.
+# To perform that check, the api will invoke, as it is, the is_<type> ()
+# function.
+#
+# This function should return 0 in case of success and a different value
+# else. Several types such as 'string', 'integer', 'binary' and 'number'
+# are supported so far. To (re)define a type, the caller must implement
+# the is_<type> () family of functions.
+#
+_long_opts=
+__long_rgxp="^([A-Z0-9a-z]{1,}(-[A-Z0-9a-z]{1,}){0,}):([A-Z0-9a-z]{1,}\
+(-[A-Z0-9a-z]{1,}){0,}){0,}:((1|2|3)(@[a-z0-9]{3,7}){0,1}|0):.*"
+# Config. errors
+__err_arg_spec="contradictive option argument specification for entry "
+__err_lng_name="missing long option name for entry "
+__err_sup_opt="supernumerary option/long option name "
+__err_req_desc="missing option description table"
+__err_shrt_syn="bad /shrt-opts argument syntax: "
+__err_lng_syn="bad /long-opts argument syntax: "
+__err_req_impl="missing implementation for type "
+# Brief
+# Print parser inconsistencies.
+__syserr () {
+    local err="$1"
+    if [ ${#} -gt 1 ]; then
+       err="${1}\`${2}'"
+    fi
+    printf "%s\n" "${__parser}: ${err}" >&2
+}
+# Brief
+# Retrieve argument type.
+__get_type () {
+    local token=${1#*:*:} type
+    case "$token" in ?@*:*) token=${token#?@};type=${token%%:*} ;;
+                   [1-3]:*) type=string                         ;;
+                         *) type=dummy                          ;;
+    esac
+    printf "%s" ${type}
+}
+# Brief
+# Control _long_opts / _optstring syntax and cross-check definitions to
+# test whether the parsing is consistent.
+__is_parsing_consistent () {
+    local token opts="$_optstring" optg flag has_shrt_opts=true
+    local type
+    if [ ! "$_long_opts" ]; then
+       __syserr "$__err_req_desc"
+       return 1
+    elif [ ! "$opts" ]; then
+       has_shrt_opts=false
+    elif ! __is_of_match "$opts" "$__shrt_rgxp"; then
+       __syserr "$__err_shrt_syn" "$opts"
+       return 1
+    fi
+
+    local opt_code lng_name tokens longopts="${_long_opts}
+__end_long_opts"
+
+    printf "%s\n" "$longopts"|while IFS="
+"
+    read token
+    do
+       if [ "$token" = "__end_long_opts" ]; then
+          if [ "$opts" ]; then
+             __syserr "$__err_sup_opt" "${opts%${opts#?}}"
+             return 1
+          fi
+       elif ! __is_of_match "$token" "$__long_rgxp"; then
+          __syserr "$__err_lng_syn" "$token"
+          return 1
+       else
+          type=$(__get_type "$token")
+          if ! type is_${type} >/dev/null 2>&1; then
+             __syserr "$__err_req_impl" "is_${type}"
+             return 1
+          else
+             opt_code="${token%%:*}"
+             token="${token#*:}"
+             lng_name="${token%%:*}"
+             if [ "$tokens" ]; then
+                if [ ! "${tokens##*@${opt_code}:*@*}" ]; then
+                   __syserr "$__err_sup_opt" "$opt_code"
+                   return 1
+                elif [ ! "${tokens##*@*:${lng_name}@*}" ]; then
+                   __syserr "$__err_sup_opt" "$lng_name"
+                   return 1
+                fi
+                tokens="${tokens}${opt_code}:${lng_name}@"
+             else
+                tokens="@${opt_code}:${lng_name}@"
+             fi
+          fi
+          #
+          if [ ${#opt_code} -gt 1 ] || ! ${has_shrt_opts}; then
+             if [ ! "$lng_name" ]; then
+                __syserr "$__err_lng_name" "$opt_code"
+                return 1
+             fi
+          elif [ ! "${opts##*${opt_code}*}" ]; then
+             token="${token#*:}"
+             if [ ! "${opts##*${opt_code}:::*}" ]; then
+                optg="${opt_code}:::"; flag=3
+             elif [ ! "${opts##*${opt_code}::*}" ]; then
+                optg="${opt_code}::" ; flag=2
+             elif [ ! "${opts##*${opt_code}:*}" ]; then
+                optg="${opt_code}:"  ; flag=1
+             else
+                optg="${opt_code}"   ; flag=0
+             fi
+             if [ ! "${token##${flag}*}" ]; then
+                opts="${opts%%${optg}*}${opts#*${optg}}"
+             else
+                __syserr "$__err_arg_spec" "$opt_code"
+                return 1
+             fi
+          elif [ ! "$lng_name" ]; then
+             __syserr "$__err_lng_name" "$opt_code"
+             return 1
+          fi
+       fi
+    done
+}
+#
+# The flag ${_long_only} tells if words prefixed with a single dash have
+# to be considered as regular long options.
+_long_only=
+# From one argp_parse call to the other, _opt and _optarg are resp. set
+# to the matched option code and its argument if any.
+_opt=
+_optarg=
+__end_of_parsing=
+# Two scanning modes are implemented so __scan_mode can be set to either:
+# - 'same' (parameters are added as they come)
+# - 'stct' (stop after scanning the first non-option parameter)
+__scan_mode=
+# Over calls, _optindex holds the index of the next element to scan and
+# ${__arg} is that element. When all clustered options of ${__arg} have
+# been scanned, __optmatch is set to true and __arg is set to the next
+# positional parameter.
+_optindex=0
+__arg=
+__optmatch=
+__noptindex=0
+# _opterr is a user level setting which, if set to 0, prevent messages
+# from being printed on stderr.
+# When argp_parse encounters a missing/superfluous option argument, it
+# sets _opt to ':'. If it encounters an illegal option, it sets _opt to
+# '?'.
+_opterr=
+#
+# Brief
+# Provide the user with a description of available short/long options.
+get_help () {
+    local optreg fmt="%9s %18s %11s   %s\n" token opt_code rtoken
+    local lng_name arg_flag desc
+
+    if [ "$#" -ne 0 ]; then
+       optreg=${__long_rgxp%%:*}:${1}:${__long_rgxp#*:*:}
+       if ! printf "%s" "$_long_opts"|egrep "$optreg"; then
+          optreg=${__long_rgxp}
+       fi >/dev/null 2>&1
+    else
+       optreg=${__long_rgxp}
+    fi
+
+    printf "\n%s\n\n" "Usage: ./${__shell} [option(s)<short|long>] <arg>...\
+ where option(s) is/are:"
+    printf "${fmt}\n" "short" "long" "argument" "description"
+    printf "%s\n" "$_long_opts"|egrep "$optreg"|while IFS="
+"
+    read token
+    do
+       opt_code=${token%%:*}; rtoken=${token#*:}; lng_name="${rtoken%%:*}"
+       case "${rtoken#*:}" in 1@*:*|1:*) arg_flag=mandatory ;;
+                              2@*:*|2:*) arg_flag=optional  ;;
+                              3@*:*|3:*) arg_flag=multiple  ;;
+                                    0:*) arg_flag=          ;;
+       esac
+       desc="${rtoken#*:*:}"
+       if [ "$_optstring" -a ! "${_optstring##*${opt_code}*}" ]; then
+          opt_code="-${opt_code}"
+          if [ "$lng_name" ]; then
+             lng_name="--${lng_name}"
+          else
+             lng_name=
+          fi
+       else
+          opt_code=
+          lng_name="--${lng_name}"
+       fi
+       printf "$fmt" "$opt_code" "$lng_name" "$arg_flag" "$desc"
+    done; printf "\n"
+}
+# Brief
+# Display the input message prefixed with the calling shell name.
+__alert_whenever () {
+    if [ "$_opterr" -ne 0 ] 2>/dev/null; then
+       printf "%s\n" "${__shell}: ${1}" >&2
+    fi
+}
+# Brief
+# Retrieve all sub-option arguments.
+__get_subargs () {
+   local sub_cnt=0 token sub_args is_present
+   if [ ! "${1##-*}" ]; then
+      sub_cnt=1
+      sub_args="$1"
+   else
+      while [ ${#} -gt 0 -a "${1##-*}" ]; do
+            sub_cnt=$((${sub_cnt} + 1))
+            if [ "$sub_args" ]; then
+               is_present=false
+               for token in ${sub_args}; do
+                   if [ "$token" = "$1" ]; then
+                      is_present=true
+                   fi
+               done
+               if ! ${is_present}; then
+                  sub_args="${sub_args} ${1}"
+               fi
+            else
+               sub_args="$1"
+            fi
+            shift
+      done
+   fi
+   printf "%s" "$sub_args"
+   return ${sub_cnt}
+}
+# Brief
+# The type interface.
+is_integer () { :; }
+#
+is_number ()  { :; }
+#
+is_string ()  { :; }
+#
+is_binary ()  { :; }
+#
+is_dummy ()   { :; }
+# Brief
+# Check the type of the argument using its type.
+__has_arg_type () {
+    local token type arg
+    printf "%s\n" "$_long_opts"|while IFS="
+"
+    read token
+    do
+       if [ "${token%%:*}" = "$_opt" ]; then
+          type=$(__get_type "$token")
+          for arg in ${@}; do
+              case "${arg%${arg#?}}" in
+                   \'|\") arg='"${arg}"'
+              esac
+              if ! eval is_${type} "$arg"; then
+                 printf "option code ${_opt} expects type ${type}!\n"
+                 return 1
+              fi >&2
+          done
+          break
+       fi
+    done
+}
+# Brief
+# Routine for parsing short options.
+__argp_parse_shrt () {
+    local opt_code="${__arg%${__arg#?}}" sub_cnt
+    if [ ! "$_optstring" ]; then
+       _opt="?"
+       __alert_whenever "unrecognized option \`-${opt_code}'"
+       return 0
+    fi
+    if [ ! "${_optstring%%*${opt_code}:::*}" ]; then
+       if [ ! "${__arg#?}" ]; then
+          if [ ${#} -eq 1 ]; then
+             _opt=":"
+             __alert_whenever "option \`-${opt_code}' requires an argument"
+             return 0
+          fi
+          _opt=${opt_code}; shift
+          _optarg="$(__get_subargs "$@")"
+          sub_cnt=$((${?} + 1))
+       else
+          _opt=${opt_code}; set -- "${@#-*${_opt}}"
+          _optarg="$(__get_subargs "$@")"
+          sub_cnt=${?}
+       fi
+       if ! __has_arg_type "$_optarg"; then
+          _opt=":"
+          return 0
+       fi
+       return ${sub_cnt}
+    elif [ ! "${_optstring%%*${opt_code}::*}" ]; then
+       _opt=${opt_code}
+       if ! __has_arg_type "${_optarg:="${__arg#?}"}"; then
+          _opt=":"
+          return 0
+       fi
+       return 1
+    elif [ ! "${_optstring%%*${opt_code}:*}" ]; then
+       if [ ! "${__arg#?}" ]; then
+          if [ ${#} -eq 1 ]; then
+             _opt=":"
+             __alert_whenever "option \`-${opt_code}' requires an argument"
+             return 0
+          fi
+          _opt=${opt_code}
+          if ! __has_arg_type "${_optarg:="$2"}"; then
+             _opt=":"
+             return 0
+          fi
+          return 2
+       fi
+       _opt=${opt_code}
+       if ! __has_arg_type "${_optarg:="${__arg#?}"}"; then
+          _opt=":"
+          return 0
+       fi
+       return 1
+    elif [ ! "${_optstring%%*${opt_code}*}" ]; then
+       _opt=${opt_code}
+       __arg="${__arg#?}"
+       if [ "$__arg" ]; then
+          __optmatch=false
+          return 0
+       fi
+       return 1
+    fi
+    _opt="?"
+    __alert_whenever "unrecognized option \`-${opt_code}'"
+    return 0
+}
+# Brief
+# Retrieve the long option name matching the input parameter.
+# Returns the associated option argument count if the match is
+# exact, else:
+# - 4 if that parameter has no long match
+# - 5 if that parameter matches several long entries
+# - 6 in any other case.
+__get_long_option_name () {
+    local opt_to_match="$1" token rtoken opt_name matches=0 opt_code
+    local opt_flag code flag has_double_dash=false ifs="$IFS"
+    local longopts="${_long_opts}
+__end_long_opts"
+
+    case "$opt_to_match" in --*) opt_to_match="${opt_to_match#--}"
+                                 has_double_dash=true            ;;
+                             -*) opt_to_match="${opt_to_match#-}"
+                                                                 ;;
+    esac
+
+    IFS="
+"
+    for token in ${longopts}; do
+        if [ "$token" = "__end_long_opts" ]; then
+           if [ ${matches} -eq 0 ]; then
+              opt_code="?"
+              if ${has_double_dash}; then
+                 opt_flag=4
+              else
+                 opt_flag=6
+              fi
+           elif [ ${matches} -eq 1 ]; then
+              opt_code=${code}
+              opt_flag=${flag}
+           else
+              opt_code="?"
+              if ${has_double_dash}; then
+                 opt_flag=5
+              else
+                 opt_flag=6
+              fi
+           fi
+        else
+           rtoken="${token#*:}"; opt_name=${rtoken%%:*}
+           if [ "$opt_name" -a ! "${opt_name##${opt_to_match}*}" ]
+           then
+              matches=$((${matches} + 1))
+              code=${token%%:*}; rtoken="${rtoken#*:}"
+              flag=${rtoken%${rtoken#?}}
+              if [ ${#opt_name} -eq ${#opt_to_match} ]; then
+                 opt_code=${code}; opt_flag=${flag}
+                 break
+              fi
+           fi
+        fi
+    done
+    IFS="$ifs"
+    #
+    printf "%s" "$opt_code"
+    return ${opt_flag}
+}
+# Brief
+# Providing _long_only is set to true, the implemented heuristic will
+# scan words prefixed with either one or two dashes as long options.
+# When the parser encounters a single dash-word which doesn't match a
+# long option, it will try to match the word leading character with a
+# short option.
+__argp_parse_internal () {
+    local parse_as_long=false opt_code opt_flag argarg sub_cnt
+    if [ ${#@} -eq 0 ]; then
+       __end_of_parsing=true
+       return 0
+    fi
+    if ${__optmatch}; then
+       case "$1" in
+          -) return 1                    ;;
+         --) __end_of_parsing=true
+             return 0                    ;;
+        --*) parse_as_long=true          ;;
+         -*) parse_as_long=${_long_only} ;;
+          *) case "$__scan_mode" in stct) __end_of_parsing=true
+                                          return 0           ;;
+                                       *) return 1           ;;
+             esac                                            ;;
+       esac
+       __arg=${1#-}
+    fi
+    if ${parse_as_long}; then
+       opt_code="$(__get_long_option_name "${1%%=*}")"
+       opt_flag="$?"
+       case "$opt_flag" in
+         0) _opt=${opt_code}
+            if [ ! "${1##*=*}" ]; then
+               _opt=":"
+               __alert_whenever "option \`${1%%=*}' doesn't allow an argument"
+               return 0
+            fi
+            return 1 ;;
+       1|3) if [ ! "${1##*=*}" ]; then
+               _opt=${opt_code}
+               if [ ${opt_flag} -eq 3 ]; then
+                  argarg="${1#*=}"
+                  shift
+                  set -- "$argarg" "$@"
+                  _optarg="$(__get_subargs "$@")"
+                  sub_cnt=${?}
+                  if ! __has_arg_type "$_optarg"; then
+                     _opt=":"
+                     return 0
+                  fi
+                  return ${sub_cnt}
+               elif ! __has_arg_type "${_optarg:="${1#*=}"}"; then
+                  _opt=":"
+                  return 0
+               fi
+               return 1
+            elif [ ${#} -gt 1 ]; then
+               _opt=${opt_code}
+               if [ ${opt_flag} -eq 3 ]; then
+                  shift
+                  _optarg="$(__get_subargs "$@")"
+                  sub_cnt=$((${?} + 1))
+                  if ! __has_arg_type "$_optarg"; then
+                     _opt=":"
+                     return 0
+                  fi
+                  return ${sub_cnt}
+               elif ! __has_arg_type "${_optarg:="$2"}"; then
+                  _opt=":"
+                  return 0
+               fi
+               return 2
+            else
+               _opt=":"
+               __alert_whenever "option \`${1}' requires an argument"
+               return 0
+            fi ;;
+         2) _opt=${opt_code}
+            if [ ! "${1##*=*}" ]; then
+               if ! __has_arg_type "${_optarg:="${1#*=}"}"; then
+                  _opt=":"
+                  return 0
+               fi
+            fi
+            return 1 ;;
+         4) _opt=${opt_code}
+            __alert_whenever "unrecognized option \`${1}'"
+            return 0 ;;
+         5) _opt=${opt_code}
+            __alert_whenever "option \`${1%%=*}' is ambiguous"
+            return 0 ;;
+       esac
+    fi
+    __argp_parse_shrt "$@"
+}
+# Brief
+# argp_parse help usage.
+argp_parse_help () {
+cat <<__help_information
+
+This is libopt4shell, a shell library which automates the parsing of
+command line parameters. That api handles long and short options style,
+options abbreviations, bundling, multiple option argument specification
+as well as argument type checking.
+
+Prior to anything, the caller must provide the parser with the main set
+of options to look for. This set of options, namely \${_long_opts}, has
+to be specified using the /long-opts=<...> switch.
+
+Additionally, other switches can be used:
+  - /shrt-opts=<...>  : to specify short options, see \${_optstring}
+  - /long-only        : to specify whether single dash-words must be
+                        matched as long options
+  - /help             : to print this help information
+
+\${_optstring} points to the set of options, single characters, which
+require a single leading dash.
+This string is the concatenation of alphanumeric option characters,
+each of them being followed by at most three colons.
+Given any option code:
+ - if bundled with no colon, the matched option doesn't allow an
+   argument
+ - if bundled with exactly one colon, the matched option requires
+   an argument
+ - if bundled with exactly two colons, the matched option can be
+   provided with an optional argument
+ - if bundled with three colons, the option must be provided with
+   at least one argument; additional ones being specified with a
+   leading space character
+
+\${_long_opts} points to the set of options strings requiring a leading
+double dash.
+This list of coma separated values provides a complete description of
+long and short options. Each line is the concatenation of an option
+code, a colon, a long name for that option code, a colon, the argument
+mandatoriness count in the range [0-3], a colon and the description
+text itself.
+
+If the option code matches an option character in \${_optstring}, it
+stands for a synonym of the long option. If not, the associated long
+name must not be left empty.
+
+On the contrary, if that long name is left empty, its option code is
+expected to be an option character.
+
+If the option code matches an option character, the associated argument
+mandatoriness count must be equal to the number of colons bundled with
+that character in \${_optstring}.
+
+Optionally, if the option argument count is greater than or equal to 1,
+it can be shipped with a type specification in the form "@<type>" to
+let argp_parse check the type of the associated arguments.
+To perform that check, the api will invoke, as it is, the is_<type> ()
+function.
+
+This function should return 0 in case of success and a different value
+else. Several types such as 'string', 'integer', 'binary' and 'number'
+are supported so far. To (re)define a type, the caller must implement
+the is_<type> () family of functions.
+
+From one argp_parse call to the other, _opt and _optarg are respectively
+set to the matched option code and its argument/argument vector if any.
+
+The error display is delegated to the user through \${_opterr}, which,
+if set to a zero, prevent messages from being printed on stderr.
+In any case, when an error arises, _opt is set to either:
+ - '?' if the scanned option appears to be illegal or ambiguous
+ - ':' if the scanned option misses its argument or if the argument
+       syntax is not the one expected
+
+To process a new set of options, the caller has to reset explicitly any
+ongoing option scanning by setting _optindex to 0.
+
+It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
+
+This library defines at last, the get_help function which, based on
+the set of short/long options, prints the shell usage information,
+or alternatively, the usage information restricted to the long option
+passed into parameter.
+
+Example:
+
+while argp_parse  /shrt-opts="hfa:"\\
+                  /long-opts="h:help:0:Print this help
+                              f:flag:0:Enable flag...
+                              a:arg:1@integer:...
+"\\
+                  /long-only "\$@"
+do
+      case "\$_opt" in
+           h) get_help               ;;
+           f) ...                    ;;
+           a) echo arg is "\$_optarg" ;;
+       \?|\:) ...                    ;;
+      esac
+done
+if [ \${_optindex} -ne 0 ]; then
+   shift \$((\${_optindex} - 1))
+fi
+
+__help_information
+}
+# Brief
+# Main point of entry.
+argp_parse () {
+    local jumps iterator cmd="s/^[[:space:]]\{1,\}//g"
+    if [ ${_optindex} -eq 0 ]; then
+       __noptindex=0
+       _long_only=false
+       for iterator in 1 2 3 4; do
+           case "$1" in
+           /shrt-opts=*) _optstring="${1#*=}"
+                         __noptindex=$((${__noptindex} + 1))
+                         shift                                       ;;
+           /long-opts=*) _long_opts=$(printf "%s" "${1#*=}"|sed "$cmd")
+                         __noptindex=$((${__noptindex} + 1))
+                         shift                                       ;;
+             /long-only) _long_only=true
+                         __noptindex=$((${__noptindex} + 1))
+                         shift                                       ;;
+                  /help) argp_parse_help
+                         return 1                                    ;;
+           esac
+       done
+       #
+       __is_parsing_consistent || { _opt="?"; return 0; }
+       #
+       case "$POSIXLY_CORRECT" in 1) __scan_mode=stct  ;;
+                                  *) __scan_mode=same  ;;
+       esac
+       _opterr=1
+       _optindex=1
+       __optmatch=true
+       __end_of_parsing=false
+    else
+       shift $((${_optindex} - 1 + ${__noptindex}))
+    fi
+    #
+    _opt=
+    _optarg=
+    __argp_parse_internal "$@"
+    jumps="$?"
+    case "$jumps" in
+         0) ${__end_of_parsing} && return 1        ;;
+         *) __optmatch=true
+            _optindex=$((${_optindex} + ${jumps})) ;;
+    esac
+    return 0
+}

@@ -1,0 +1,25 @@
+# Default log4shell configuration file.
+# The standard output pattern layout is used to format each logger
+# entry. This parameter must be made of a subset of the following
+# specifiers shipped with a leading '%':
+# - L (the logger level)
+# - D (the logging timestamp "y-m-d hour(24):min:sec")
+# - F (the file where the logging event occurred)
+# - N (the logging counter)
+# - H (the hostname)
+# - M (the message)
+# - P (the pid of the current process)
+# - T (a brief stack trace)
+# - % (the literal percent sign '%')
+# The N specifier can be prefixed with a zero-padding indicator
+# so the required number of leading zeros will be added.
+__pattern="%D,%5N - {%H} - [%L] - %F | %M"
+# The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
+# <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
+# severity (or above) will be logged.
+__log_level=INFO
+# Appenders properties.
+__cons_appender=
+__file_appender=/tmp
+# Additional appending options.
+__append_per_level=true

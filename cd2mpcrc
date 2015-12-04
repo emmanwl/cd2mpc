@@ -1,0 +1,44 @@
+# User configuration file for cd2mpc
+## CDDB settings
+# Server protocol must be either http, <cddbp:default> or proxy; in the 
+# former case, the environment variable ${http_proxy} must be formated
+# as in http://${proxy}:${port}
+PROTOCOL=cddbp
+# Cddb server name
+SERVER=freedb.org
+# Cddb server port
+PORT=8880
+# Default cddb cache directory
+DCACHE_DIR=${HOME}/.cddbslave
+# Cddb lookup
+# List of cddb genres to lookup
+CDDB_VECTOR="folk jazz misc rock country blues newage reggae classical soundtrack"
+## Encoding settings
+# Preferred device
+CDEVICE=/dev/acd0
+# Favoured encoding format(s)
+# White space separated list of audio formats to produce: <mpc:default,flac,mp3>
+ENCODERS="mp3 flac" 
+# Flac compression settings
+FLAC_OPTS="--compression-level-5 --no-decode-through-errors --verify"
+# Musepack encoding settings
+MPC_OPTS="--quality 7.00 --unicode"
+# Lame encoding settings
+MP3_OPTS="--preset extreme --replaygain-accurate --vbr-new -q2 -V2 -T --id3v2-only"
+## General file management
+# Output directory path <${HOME}/encodes:default>
+OPUTDIR=${HOME}/encodes
+# Overwrite behaviour
+# Must be set to either skip, <prompt:default> or force
+WBEHAVE=prompt
+# Naming mask for batch encoding
+# Must be a quoted string made of '%N' (title), '%A' (artist), '%T' (album),
+# '%G' (genre) and '%Y' (year) using ' ', '_'  or '-' as field separator
+BATCH_MASK="%N"
+# Naming mask for single encoding
+# Must be a quoted string made of '%A' (artist), '%T' (album), '%G' (genre)
+# and '%Y' (year) using ' ', '_'  or '-' as field separator
+SINGLE_MASK="%T - %A - %Y"
+## Misc
+# Generate m3u playlist for each selected encoder/extension <true:default|false>
+CREATE_PLAYLIST=true
