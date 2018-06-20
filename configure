@@ -52,9 +52,9 @@ __options_set() {
     local options="I:install-dir:1@path:Specify the install directory <install-dir>
                    r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
                    i:install@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the <install-dir>
-                   D:define:1@key-value:Specify a search/replacement pattern within a key/value pair <KEY>=<VALUE>: '__KEY__' being the searched pattern and 'VALUE' its replacement string
+                   D:define:1@key-value:Specify a search/replacement pattern (<__KEY__>/<VALUE>) within the key/value pair <KEY>=<VALUE>
                    c:dot-file:1@key-value-path:Install, as a dotfile, the file located in the current directory and whose basename is 'KEY' to the target directory path 'VALUE'
-                   t:test@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the test directory hierarchy
+                   t:test@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the test directory
                    v:version:0:Print version information and exit
                    h:help:0:Print help information and exit"
     printf "%s" "$options"
