@@ -22,7 +22,7 @@ __import_resource_or_fail "<__libdir__>/libopt4shell.sh"
 __import_resource_or_fail "<__libdir__>/liblog4shell.sh" --file-appender=/dev/null
 
 # Shell name
-__shell="${0##*/}"
+__shell="$(__get_calling_shell_name "$0")"
 # Brief
 # Implementation for the type interface.
 is_string() { __is_of_match "$1" "[[:print:]]+"; }

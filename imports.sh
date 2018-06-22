@@ -9,8 +9,19 @@ __import_resource_or_fail() {
       . "$resource" "$@"
    else
       printf "Import failed: missing required dependency ${resource##*/} in ${resource%/*}, exiting\n" >&2
-      stty echo 2>/dev/null
       exit 1
    fi
    return 0
+}
+# Brief
+# Retrieve a contextual shell name:
+# the invoking shell path if it's
+# a relative path else the invoking
+# basename.
+__get_calling_shell_name() {
+   if [ ! "${1##\./*}" ]; then
+      printf "$1"
+   else
+      basename "$1"
+   fi
 }

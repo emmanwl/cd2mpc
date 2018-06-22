@@ -1,5 +1,4 @@
 #! /usr/bin/env sh
-stty -echo 2>/dev/null
 #@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
 #@(#) All rights reserved.
 #@(#)
@@ -28,9 +27,10 @@ E_SIG_INT=128
 . "<__libtools__>/imports.sh" 2>/dev/null
 __import_resource_or_fail "<__libdir__>/liboptwrapper.sh"
 __import_resource_or_fail "<__libdir__>/liblog4shell.sh"
+stty -echo 2>/dev/null
 
 # Shell name
-__shell="${0##*/}"
+__shell="$(__get_calling_shell_name "$0")"
 # Implementation for the type interface.
 is_string() { __is_of_match "$1" "[[:print:]]+"; }
 is_path() { __is_path "$1"; }

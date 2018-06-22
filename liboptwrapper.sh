@@ -67,11 +67,10 @@ type checking.
 
 argp_parse accepts the following switches:
   - /options=<...>                 (mandatory): to set the options table
-  - /callback-option-prefix=<...>  (optional) : to override the prefix from
-                                                which derive the place holders
-                                                tracking the option/argument(s)
-                                                currently scanned, default is
-                                                _opt
+  - /callback-option-prefix=<...>  (optional) : to override the prefix of the
+                                                place holders tracking the
+						option/argument(s) currently 
+						scanned, default is _opt
   - /parsing-strategy=<...>        (optional) : to set the parsing strategy,
                                                 default is PERMUTE
   - /case-insensitive              (optional) : to allow the matching of long

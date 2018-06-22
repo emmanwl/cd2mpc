@@ -20,12 +20,13 @@ CONFIGURE_VERSION=1.0
 
 E_SUCCESS=0
 E_FAILURE=1
+E_EXIT=2
 
 # Bootstrap shell
 __bootstrap() {
     local target="${TMPDIR:-/tmp}/${1}"
     if [ ! -e "$1" ]; then
-       printf "Bootstrap failed: could not find ${1}, exiting\n" >&2
+       printf "Bootstrap failed: could not find ${1}, exiting.\n" >&2
        return ${E_FAILURE}
     fi
     perl -pe "s#<__(.*?)__>#.#g" "$1" > ${target}.$$
@@ -33,10 +34,10 @@ __bootstrap() {
     rm -f ${target}.$$
 }
 
-__bootstrap "libopt4shell.sh"
+__bootstrap "libopt4shell.sh" || exit ${E_FAILURE}
 
 # Shell name
-__shell="${0##*/}"
+__shell="$(__get_calling_shell_name "$0")"
 # Brief
 # Extract configure body.
 __extract_configure_line_number_minus_one() {
@@ -64,12 +65,12 @@ __options_set() {
 __print_version() {
 cat <<version >&2
 
-This is ${__shell} v${CONFIGURE_VERSION}.
-${__shell} is a cli tool that automates test/install tasks for shell projects. A shell project refers to a
+This is ${__shell#\./} v${CONFIGURE_VERSION}.
+${__shell#\./} is a cli tool that automates test/install tasks for shell projects. A shell project refers to a
 collection of scripts (*.sh) and configuration files (*rc) referencing parametrized paths. The tool aims at
 testing and installing any number of scripts in a centralized way.
 
-${__shell} parses files named '*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals
+${__shell#\./} parses files named '*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals
 match predefined test/install/check tasks.
 
 These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
@@ -85,7 +86,7 @@ Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh } l
 libscript<1|2>.sh being referenced in those resources within the pattern '<__libdir__>/libscript<1|2>.sh',
 the command:
 
-./${__shell} --resources-dir=. --define libdir=${HOME}/libscript --install-dir ${HOME}/bin --test=libscript1test.sh
+${__shell} --resources-dir=. --define libdir=${HOME}/libscript --install-dir ${HOME}/bin --test=libscript1test.sh
 --install=script.sh --dot-file scriptrc=${HOME} would generate a makefile from which:
 
 - 'make install' will build the following file tree:
@@ -95,6 +96,8 @@ the command:
     ~/libscript/libscript1.sh
     ~/libscript/libscript2.sh
   }
+
+- 'make check' would span a new shell to run shellcheck on script.sh in a best-effort mode
 
 - 'make test' would spawn a new shell to run libscript1test.sh
 
@@ -323,7 +326,7 @@ __makefile() {
       {
         for value in $(__get_key_value "INSTALL" "$@"); do
             if [ -f "$value" ]; then
-               printf "\t@shellcheck \$(WRKDIR)/install/${value} || { echo Shellcheck exited with a non-zero status when checking ${value}; }\n"
+               printf "\t@shellcheck \$(WRKDIR)/install/${value} || { echo Check: shellcheck exited with a non-zero status when checking ${value}; }\n"
             fi
         done
       }
@@ -332,7 +335,7 @@ __makefile() {
       {
         for value in $(__get_key_value "TEST" "$@"); do
             if [ -f "$value" ]; then
-               printf "\t@sh \$(WRKDIR)/test/${value} || { echo Test ${value} failed; return 1; }\n"
+               printf "\t@sh \$(WRKDIR)/test/${value} || { echo Test: test ${value} failed; return 1; }\n"
             fi
         done
       } | sort -R
@@ -362,9 +365,9 @@ __parse_options() {
     do
         case "$_opt" in
                h) __argp_parse_opts_help
-                  return ${E_SUCCESS}                                                    ;;
+                  return ${E_EXIT}                                                       ;;
                v) __print_version
-                  return ${E_SUCCESS}                                                    ;;
+                  return ${E_EXIT}                                                       ;;
                r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
                I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
              \@i) __accumulate "INSTALL=${_optarg}" argv                                 ;;
@@ -377,11 +380,13 @@ __parse_options() {
 }
 #
 __configure () {
-    local argv
-    if ! argv="$(__parse_options $@)"; then
+    local argv r
+    argv="$(__parse_options $@)"
+    if [ ${r:=${?}} -eq ${E_EXIT} ]; then
+       return ${E_SUCCESS}
+    elif [ ${r} -ne ${E_SUCCESS} ]; then
        return ${E_FAILURE}
-    fi
-    if ! __makefile "$argv"; then
+    elif ! __makefile "$argv"; then
        printf "Configure failed: could not generate makefile.\n" >&2
        return ${E_FAILURE}
     fi

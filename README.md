@@ -10,6 +10,6 @@ Configure cd2mpc by running:
 
 - ./configure (options available with -h)
 
-Run make check to check shell source files.
+Run make check to check all executable shell scripts
 Run make test to run the test suite.
 Run make install clean to install.

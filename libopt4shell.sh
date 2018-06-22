@@ -27,7 +27,7 @@ E_END_OF_PARSING=127
 __import_resource_or_fail "<__libtools__>/lib4shell.sh"
 
 # Shell name
-__shell="${0##*/}"
+__shell="$(__get_calling_shell_name "$0")"
 # Parser name
 __parser=argp_parse
 #
@@ -532,8 +532,8 @@ __get_long_option_code() {
     local mainopts="${_main_opts}
 __end_main_opts"
     case "$opt_to_match" in --*) opt_to_match="${opt_to_match#--}"
-                                 has_double_dash=true ;;
-                             -*) opt_to_match="${opt_to_match#-}";;
+                                 has_double_dash=true             ;;
+                             -*) opt_to_match="${opt_to_match#-}" ;;
     esac
     for token in ${mainopts}; do
         token="$(__trim "$token")"
@@ -542,8 +542,8 @@ __end_main_opts"
               opt_code="$__err_code_illegal_opt"
               __decode arg_flag "$has_double_dash" 4 5
            elif [ ${matches} -eq 1 ]; then
-              opt_code=${matched_code}
-              arg_flag=${matched_flag}
+              opt_code="$matched_code"
+              arg_flag="$matched_flag"
            else
               opt_code="$__err_code_illegal_opt"
               __decode arg_flag "$has_double_dash" 3 5
@@ -713,7 +713,7 @@ __read_parser_configuration_arguments() {
                required-options=*) _req_opts="$(__append "$(__trim_globally "${1#*=}")" "$_req_opts" ",")"   ;;
               exclusive-options=*) _excl_opts="$(__append "$(__trim_globally "${1#*=}")" "$_excl_opts" "@")" ;;
              argument-separator=*) _arg_sep="$(__trim_globally "${1#*=}")"                                   ;;
-        filter-args-to-uniqueness) _filter_args_to_uniqueness=true                                            ;;
+        filter-args-to-uniqueness) _filter_args_to_uniqueness=true                                           ;;
         esac
         noptindex=$((${noptindex} + 1))
         shift
@@ -1038,7 +1038,7 @@ __argp_parse_accumulated_options() {
 # Brief
 # Internal statefull parsing routine.
 __argp_parse() {
-    local retrn=${E_END_OF_PARSING}
+    local retrn="$E_END_OF_PARSING"
     if [ ${__optindex} -eq 0 ]; then
        __optindex=1
        __optwrd=
@@ -1053,7 +1053,7 @@ __argp_parse() {
        _req_opts=
        _excl_opts=
        __read_parser_configuration_arguments "$@"
-       __noptindex=${?}
+       __noptindex="$?"
        __init_option_mutators
        __configure_parser || exit ${E_BAD_ARGS}
     fi
@@ -1080,13 +1080,30 @@ __argp_parse_reset() {
     __argp_parse_set_index 0
 }
 # Brief
+# Build a readable option argument description.
+__get_printable_option_argument_description() {
+    local arg_flag="$1" arg_type
+    case "$arg_flag" in [1-2]@*) arg_type="${arg_flag#?@}"
+                                 case "${arg_flag%%@*}" in
+                                    1) arg_flag="<${arg_type}.arg>"          ;;
+                                    2) arg_flag="<optional.${arg_type}.arg>" ;;
+                                 esac ;;
+                          [1-2]) arg_type="string"
+                                 case "$arg_flag" in
+                                    1) arg_flag="<${arg_type}.arg>"          ;;
+                                    2) arg_flag="<optional.${arg_type}.arg>" ;;
+                                 esac ;;
+                              *) arg_type=""; arg_flag=""                    ;;
+    esac
+    printf "%s" "$arg_flag"
+}
+# Brief
 # Build help output (printf) format
 __get_help_output_format() {
-    local token opt_code opt_code_max_length=${#1}
-    local aliases alias_max_length=${#2}
-    local arg_flag arg_flag_max_length=${#3}
-    local arg_type arg_type_max_length=${#4}
-    local desc desc_max_length=${#5} unread
+    local token opt_code opt_code_max_length="${#1}"
+    local aliases alias_max_length="${#2}"
+    local arg_flag arg_type arg_flag_max_length="${#3}"
+    local desc desc_max_length="${#4}" unread
     local mainopts="${_main_opts}
 __end_main_opts" IFS="
 "
@@ -1098,7 +1115,7 @@ __end_main_opts" IFS="
               desc="${desc}:${unread}"
            fi
            if [ ${opt_code_max_length} -lt ${#opt_code} ]; then
-              opt_code_max_length=${#opt_code}
+              opt_code_max_length="${#opt_code}"
            fi
            if [ "$aliases" ]; then
               if [ ! "${aliases%%*!}" ]; then
@@ -1114,27 +1131,12 @@ __end_main_opts" IFS="
                   fi
               done
            fi
-           case "$arg_flag" in [1-2]@*) arg_type="${arg_flag#?@}"
-                                        case "${arg_flag%%@*}" in
-                                           1) arg_flag="mandatory";;
-                                           2) arg_flag="optional" ;;
-                                        esac ;;
-                                 [1-2]) arg_type="$4"
-                                        case "$arg_flag" in
-                                           1) arg_flag="mandatory";;
-                                           2) arg_flag="optional" ;;
-                                        esac ;;
-                                     *) arg_type="$4"
-                                        arg_flag="$3" ;;
-           esac
+           arg_flag="$(__get_printable_option_argument_description "$arg_flag")"
            if [ ${arg_flag_max_length} -lt ${#arg_flag} ]; then
-              arg_flag_max_length=${#arg_flag}
-           fi
-           if [ ${arg_type_max_length} -lt ${#arg_type} ]; then
-              arg_type_max_length=${#arg_type}
+              arg_flag_max_length="${#arg_flag}"
            fi
            if [ ${desc_max_length} -lt ${#desc} ]; then
-              desc_max_length=${#desc}
+              desc_max_length="${#desc}"
            fi
         else
            if [ ${opt_code_max_length} -eq 1 ]; then
@@ -1143,7 +1145,7 @@ __end_main_opts" IFS="
            if [ ${alias_max_length} -ge ${#2} ]; then
               alias_max_length=$((${alias_max_length} + 2))
            fi
-           printf "%%-${opt_code_max_length}s  %%-${alias_max_length}s  %%-${arg_flag_max_length}s  %%-${arg_type_max_length}s  %%-${desc_max_length}s"
+           printf "%%-${opt_code_max_length}s  %%-${alias_max_length}s  %%-${arg_flag_max_length}s  %%-${desc_max_length}s"
         fi
     done
 }
@@ -1152,45 +1154,32 @@ __end_main_opts" IFS="
 __argp_parse_opts_help() {
     local token opt_code aliases arg_flag arg_type desc unread IFS="
 "
-    local fmt="$(__get_help_output_format short long argument type description)\n"
+    local fmt="$(__get_help_output_format short long argument description)\n"
     {
-      printf "\n%s\n\n" "Usage: ./${__shell} [option(s)[<short|long>]] <arg>... where option(s) is/are:"
-      printf "${fmt}\n" short long argument type description
+      printf "\n%s\n\n" "Help usage: ${__shell} [options] <arguments> where options are:"
       for token in ${_main_opts}; do
          __read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
          if [ "$unread" ]; then
             desc="${desc}:${unread}"
          fi
-         case "$arg_flag" in [1-2]@*) arg_type="${arg_flag#?@}"
-                                      case "${arg_flag%%@*}" in
-                                            1) arg_flag="mandatory";;
-                                            2) arg_flag="optional" ;;
-                                      esac ;;
-                               [1-2]) arg_type=
-                                      case "$arg_flag" in
-                                            1) arg_flag="mandatory";;
-                                            2) arg_flag="optional" ;;
-                                      esac ;;
-                                   *) arg_type=
-                                      arg_flag= ;;
-         esac
          if [ ${#opt_code} -eq 1 ]; then
             opt_code="-${opt_code}"
          else
-            opt_code=
+            opt_code=""
          fi
+         arg_flag="$(__get_printable_option_argument_description "$arg_flag")"
          if [ "$aliases" ]; then
             if [ ! "${aliases%%*!}" ]; then
                (local alternate IFS="|"
                 for alternate in ${aliases}; do
                     alternate="$(__strip_ending_option_symbol "$alternate")"
-                    printf "$fmt" "" "--no-${alternate}" "$arg_flag" "$arg_type" "Similar to --no${alternate}, negate --${alternate}"
+                    printf "$fmt" "" "--no-${alternate}" "$arg_flag" "Similar to --no${alternate}, negate --${alternate}"
                 done)
             else
-               printf "$fmt" "$opt_code" "--$(__strip_ending_option_symbol "$aliases")" "$arg_flag" "$arg_type" "$desc"
+               printf "$fmt" "$opt_code" "--$(__strip_ending_option_symbol "$aliases")" "$arg_flag" "$desc"
             fi
          else
-            printf "$fmt" "$opt_code" "" "$arg_flag" "$arg_type" "$desc"
+            printf "$fmt" "$opt_code" "" "$arg_flag" "$desc"
          fi
       done
       printf "\n"
