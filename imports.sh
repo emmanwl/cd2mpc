@@ -20,8 +20,8 @@ __import_resource_or_fail() {
 # basename.
 __get_calling_shell_name() {
    if [ ! "${1##\./*}" ]; then
-      printf "$1"
+      printf "%s" "$1"
    else
-      basename "$1"
+      basename -- "$1"
    fi
 }

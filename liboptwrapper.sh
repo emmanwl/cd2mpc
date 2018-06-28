@@ -61,9 +61,8 @@ argp_parse_help() {
 less <<__help_information
 
 This embeds libopt4shell, a shell API for parsing command line parameters. It handles
-short/long options and features option bundling, option abbreviation to uniqueness,
-option aliasing, negatable and incremental style of options as well as input argument
-type checking.
+short/long options and features, noticeably, option bundling, option abbreviation to
+uniqueness, option aliasing and argument type checking.
 
 argp_parse accepts the following switches:
   - /options=<...>                 (mandatory): to set the options table

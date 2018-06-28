@@ -387,9 +387,9 @@ is_key_value() {
 }
 # Brief
 # Check whether the option argument is of the given type:
-# - if ${2} is like key-value-${type}, check whether ${1}
-#   is of type key-value and if ${1#*=} is of type ${type}.
-# - else check whether ${1} is of type ${2}
+# - if ${2} is like key-value-${type}, check that ${1}
+#   is of type key-value and that ${1#*=} is of type ${type}.
+# - else check that ${1} is of type ${2}
 __has_argument_proper_type() {
   local argument="$1" type="$2"
   if [ ! "${type##key-value-*}" ]; then
@@ -410,8 +410,7 @@ __has_option_argument_proper_type_internal() {
   fi
 }
 # Brief
-# Check whether the option argument(s) is of the proper type,
-# type being read from __${__opt}_argument_type.
+# Check that the option argument(s) is of the proper type.
 __has_option_argument_proper_type() {
   __has_option_argument_proper_type_internal "${__optarg:="$1"}" "$(eval echo '$'__"${__opt}"_argument_type)" "$2"
 }
@@ -497,7 +496,7 @@ __lowerize_accordingly() {
     printf "%s" "$string"
 }
 # Brief
-# Check whether ${2} matches the fully-qualified option ${1}
+# Check that ${2} matches the fully-qualified option ${1}
 # or one of its negated forms if relevant.
 # Return:
 # - the argument mandatoriness flag of the matched option
@@ -1156,7 +1155,7 @@ __argp_parse_opts_help() {
 "
     local fmt="$(__get_help_output_format short long argument description)\n"
     {
-      printf "\n%s\n\n" "Help usage: ${__shell} [options] <arguments> where options are:"
+      printf "\n%s\n\n" "Help usage: ${__shell} [options] <arguments> with the following option(s):"
       for token in ${_main_opts}; do
          __read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
          if [ "$unread" ]; then
