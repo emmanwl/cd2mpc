@@ -61,15 +61,15 @@ argp_parse_help() {
 less <<__help_information
 
 This embeds libopt4shell, a shell API for parsing command line parameters. It handles
-short/long options and features, noticeably, option bundling, option abbreviation to
+short/long options and features noticeably: option bundling, option abbreviation to
 uniqueness, option aliasing and argument type checking.
 
 argp_parse accepts the following switches:
   - /options=<...>                 (mandatory): to set the options table
   - /callback-option-prefix=<...>  (optional) : to override the prefix of the
                                                 place holders tracking the
-						option/argument(s) currently 
-						scanned, default is _opt
+                                                option/argument(s) currently
+                                                scanned, default is _opt
   - /parsing-strategy=<...>        (optional) : to set the parsing strategy,
                                                 default is PERMUTE
   - /case-insensitive              (optional) : to allow the matching of long
@@ -92,7 +92,7 @@ argp_parse accepts the following switches:
                                                 of mutually exclusive options
   - /argument-separator=<...>      (optional) : to specify how to split multiple
                                                 option arguments
-  - /filter-args-to-uniqueness                : to filter multiple options arguments
+  - /trim-option-arguments-to-uniqueness      : to filter multiple options arguments
                                                 to uniqueness
   - /help                                     : to print this help information
 
@@ -217,8 +217,9 @@ its argument to '<opt_a>/<opt_b>' where <opt_a>/<opt_b> denotes the conflicting 
 pair. As usual, if /do-not-exit-on-error is not provided, the error is reported on stderr.
 
 To specify which separator to use when accumulating multiple option arguments in a single
-argument vector, the API provides the /argument-separator<argument> switch. Those arguments
-can filtered to uniqueness if the parser is given the /filter-args-to-uniqueness switch.
+argument vector, the API provides the /argument-separator=<argument> switch. Those arguments
+can filtered to uniqueness if the parser is given the /trim-option-arguments-to-uniqueness
+switch.
 
 At last, the API provides the argp_parse_opts_help function to report to the user the whole
 usage information.

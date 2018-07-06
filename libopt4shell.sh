@@ -45,7 +45,7 @@ __parser=argp_parse
 _main_opts=
 __opt_code_rgxp="[[:alnum:]]+"
 __true_false_rgxp="([tT][rR][uU][eE]|1|[fF][aA][lL][sS][eE]|0)"
-__key_rgxp="[[:alpha:]][[:alnum:]]{1,}(-[[:alnum:]]+)*"
+__key_rgxp="[[:alpha:]][[:alnum:]]{1,}(_[[:alnum:]]+)*"
 __word_rgxp="[[:alnum:]]{2,}(-[[:alnum:]]+)*"
 __arg_type_rgxp="string|integer|binary|number|path|${__word_rgxp}"
 __type_rgxp="((1|2)(@(key-value|${__arg_type_rgxp}|key-value-(${__arg_type_rgxp}))){0,1}|0)"
@@ -177,13 +177,15 @@ _req_opts=
 # that are mutually exclusive of each other.
 _excl_opts=
 #
-# {_arg_sep} specify how to join multiple option arguments in a single vector.
+# {_arg_sep} specifies how to join multiple option arguments in a single vector.
 _arg_sep=","
-#
-# {_filter_args_to_uniqueness} specify how to capture multiple option arguments.
+# {_key_value_sep} specifies how to join multiple key-value option arguments in
+# a single vector.
+_key_value_sep="@"
+# {_filter_option_arguments_to_uniqueness} specify how to capture multiple option arguments.
 # If set to true, the argument is added to the argument vector provided it was
 # not previously added.
-_filter_args_to_uniqueness=false
+_filter_option_arguments_to_uniqueness=false
 #
 # Configuration errors
 __err_missing_long_alias="missing long alias(es) for entry \`%s'"
@@ -372,7 +374,7 @@ EOF
 #
 __set_erroneous_option_and_argument() {
     local optarg
-    __decode optarg "$_handle_error" "" "$2"
+    __decode optarg "$_exit_on_error" "" "$2"
     __set_option_and_argument "$1" "$optarg"
 }
 #
@@ -418,9 +420,7 @@ __has_option_argument_proper_type() {
 # Simple if-then-else read routine: if ${1} is evaluated to true,
 # return 0 else return 1.
 ___decode() {
-    case "$1" in [tT][rR][uU][eE]|0) return 0 ;;
-                                  *) return 1 ;;
-    esac
+    case "$1" in [tT][rR][uU][eE]|0) return 0 ;; *) return 1 ;; esac
 }
 # Brief
 # Simple if-then-else read routine: if ${2} is evaluated to true,
@@ -702,17 +702,17 @@ __read_parser_configuration_arguments() {
     local cmd="s/^[[:space:]]\{0,\}//g" noptindex=0
     while [ ${#} -gt 0 -a ! "${1##/*}" ]; do
         case "${1#/}" in
-                        options=*) _main_opts=$(printf "%s" "${1#*=}"|sed "$cmd")                            ;;
-         callback-option-prefix=*) _callback_opt="$(__trim_globally "${1#*=}")"                              ;;
-               parsing-strategy=*) _parsing_strategy="${1#*=}"                                               ;;
-                 case-insensitive) _case_sensitive=false                                                     ;;
-                        long-only) _long_only=true                                                           ;;
-          allow-posix-long-option) _allow_posix_long_opt=true                                                ;;
-             do-not-exit-on-error) _exit_on_error=false                                                      ;;
-               required-options=*) _req_opts="$(__append "$(__trim_globally "${1#*=}")" "$_req_opts" ",")"   ;;
-              exclusive-options=*) _excl_opts="$(__append "$(__trim_globally "${1#*=}")" "$_excl_opts" "@")" ;;
-             argument-separator=*) _arg_sep="$(__trim_globally "${1#*=}")"                                   ;;
-        filter-args-to-uniqueness) _filter_args_to_uniqueness=true                                           ;;
+                                  options=*) _main_opts=$(printf "%s" "${1#*=}"|sed "$cmd")                            ;;
+                   callback-option-prefix=*) _callback_opt="$(__trim_globally "${1#*=}")"                              ;;
+                         parsing-strategy=*) _parsing_strategy="${1#*=}"                                               ;;
+                           case-insensitive) _case_sensitive=false                                                     ;;
+                                  long-only) _long_only=true                                                           ;;
+                    allow-posix-long-option) _allow_posix_long_opt=true                                                ;;
+                       do-not-exit-on-error) _exit_on_error=false                                                      ;;
+                         required-options=*) _req_opts="$(__append "$(__trim_globally "${1#*=}")" "$_req_opts" ",")"   ;;
+                        exclusive-options=*) _excl_opts="$(__append "$(__trim_globally "${1#*=}")" "$_excl_opts" "@")" ;;
+                       argument-separator=*) _arg_sep="$(__trim_globally "${1#*=}")"                                   ;;
+        trim-option-arguments-to-uniqueness) _filter_option_arguments_to_uniqueness=true                               ;;
         esac
         noptindex=$((${noptindex} + 1))
         shift
@@ -834,10 +834,13 @@ __configure_parser() {
     elif [ ${#_arg_sep} -gt 1 ]; then
        __syserr "$__err_invalid_argument_separator"
        return 1
+    elif [ ${#_key_value_sep} -gt 1 ]; then
+       __syserr "$__err_invalid_argument_separator"
+       return 1
     fi
-    __decode __err_code_illegal_arg "$_handle_error" "?" ":"
-    __decode __err_code_expected_opt "$_handle_error" "?" ","
-    __decode __err_code_conflict_opt "$_handle_error" "?" "^"
+    __decode __err_code_illegal_arg "$_exit_on_error" "?" ":"
+    __decode __err_code_expected_opt "$_exit_on_error" "?" ","
+    __decode __err_code_conflict_opt "$_exit_on_error" "?" "^"
     return 0
 }
 # Brief
@@ -912,14 +915,57 @@ __remove_current_entry_from_required_and_accumulated_options() {
     __remove_entry_from_accumulated_options_if_necessary "$1"
 }
 # Brief
+# Check whether ${1} must be added to vector ${2} (${3} denoting the 
+# element separator).
+__must_1_be_added_to_2_using_3_as_separator() {
+    if ! ${_filter_option_arguments_to_uniqueness}; then
+       return 0
+    elif  ! __is_1_contained_in_2_using_3_as_separator "$1" "$2" "$3"; then
+       return 0
+    fi
+    return 1
+}
+# Brief
+# Compute the accumulated argument vector __${1}_arguments depending
+# on _${1}_argument_type.
+__get_accumulated_argument_vector() {
+    local opt="$1" optarg="$2" optargs="$(eval echo '$'__"${1}"_arguments)"
+    local key_value _optargs matched=false
+    if [ ! "$optargs" ]; then
+       _optargs="$optarg"
+    else
+       case "$(eval echo '$'__"${opt}"_argument_type)" in
+          key-value*) for key_value in $(__split_tokens_accordingly ${_key_value_sep} "$optargs"); do
+                          if [ "${key_value%%=*}" = "${optarg%%=*}" ]; then
+                             matched=true
+                             if [ ! "$_optargs" ]; then
+                                _optargs="${key_value}${_arg_sep}${optarg#*=}"
+                             elif __must_1_be_added_to_2_using_3_as_separator "${optarg#*=}" "${_optargs#*=}" "$_arg_sep"; then
+                                _optargs="${_optargs}${_key_value_sep}${key_value}${_arg_sep}${optarg#*=}"
+                             fi
+                          elif [ ! "$_optargs" ]; then
+                             _optargs="$key_value"
+                          else
+                             _optargs="${_optargs}${_key_value_sep}${key_value}"
+                          fi
+                      done
+                      ${matched} || _optargs="${_optargs}${_key_value_sep}${optarg}" ;;
+                   *) if __must_1_be_added_to_2_using_3_as_separator "$optarg" "$_optargs" "$_arg_sep"; then
+                         _optargs="${optargs}${_arg_sep}${optarg}"
+                      fi                                                             ;;
+       esac
+    fi
+    printf "%s" "$_optargs"
+}
+# Brief
 # Accumulate incremental option ${1} in ${__acc_opts} and, at the
 # same time, its argument(s) in ${__${1}_arguments}.
 __accumulate_option_and_arguments() {
-    local opt="$1" opt_code has_entry=false
-    local optargs="$(eval echo '$'__"${1}"_arguments)"
+    local opt="$1" optarg="$2"
     if [ ! "$__acc_opts" ]; then
        __acc_opts="$opt"
     else
+       local opt_code has_entry=false
        for opt_code in $(__split_tokens_accordingly ":" "$__acc_opts")
        do
            if [ "$opt_code" = "$opt" ]; then
@@ -931,19 +977,7 @@ __accumulate_option_and_arguments() {
           __acc_opts="${__acc_opts}:${opt}"
        fi
     fi
-    shift
-    eval "__${opt}_arguments='$(if [ ! "$optargs" ]
-                                then
-                                   printf "%s" "$1"
-                                elif ! ${_filter_args_to_uniqueness}
-                                then
-                                   printf "%s" "${optargs}${_arg_sep}${1}"
-                                elif ! __is_1_contained_in_2_using_3_as_separator "$1" "$optargs" "$_arg_sep"
-                                then
-                                   printf "%s" "${optargs}${_arg_sep}${1}"
-                                else
-                                   printf "%s" "$optargs"
-                                fi)'"
+    eval "__${opt}_arguments=$(__get_accumulated_argument_vector "$opt" "$optarg")"
 }
 #
 __accumulate_mandatory_option_and_arguments_if_necessary() {
@@ -1007,11 +1041,21 @@ __argp_parse_set_index() {
     eval "${_callback_opt}index=${1}"
 }
 # Brief
+# Build a valid option argument vector avoiding breaking spaces.
+__get_option_arguments() {
+    local opt="$1" argument_type="$(eval echo '$'__"${1}"_argument_type)"
+    if [ "$(eval echo '$'__has_${opt}_accumulator)" = "true" -a "$argument_type" -a ! "${argument_type##key-value*}" ]; then
+       eval printf "%s" '$'__${opt}_arguments|sed "s/${_key_value_sep}/ /g"
+    else
+       eval printf "%s" '$'__${opt}_arguments
+    fi
+}
+# Brief
 # Parse incremental options with their arguments and set the callback
 # state.
 __argp_parse_incremental_options() {
     if [ "$__acc_opts" ]; then
-       __set_callback_option_and_argument "@${__acc_opts%%:*}" "$(eval echo '$'__"${__acc_opts%%:*}"_arguments)"
+       __set_callback_option_and_argument "@${__acc_opts%%:*}" "$(__get_option_arguments "${__acc_opts%%:*}")"
        __remove_entry_from_accumulated_options_if_necessary "${__acc_opts%%:*}"
        return 0
     fi
@@ -1035,9 +1079,9 @@ __argp_parse_accumulated_options() {
     fi
 }
 # Brief
-# Internal statefull parsing routine.
+# Internal stateful parsing routine.
 __argp_parse() {
-    local retrn="$E_END_OF_PARSING"
+    local r="$E_END_OF_PARSING"
     if [ ${__optindex} -eq 0 ]; then
        __optindex=1
        __optwrd=
@@ -1060,11 +1104,11 @@ __argp_parse() {
     shift $((${__optindex} + ${__noptindex} - 1))
     if [ ${#} -ne 0 ]; then
        __argp_parse_internal "$@"
-       retrn="$?"
+       r="$?"
     fi
-    __argp_parse_set_index $((${__optindex} + ${retrn} % ${E_END_OF_PARSING}))
+    __argp_parse_set_index $((${__optindex} + ${r} % ${E_END_OF_PARSING}))
     #
-    if [ ${retrn} -ge ${E_END_OF_PARSING} ]; then
+    if [ ${r} -ge ${E_END_OF_PARSING} ]; then
        __argp_parse_accumulated_options
        return
     fi

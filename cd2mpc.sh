@@ -94,9 +94,7 @@ inspect_encoding_options() {
     #
     local ext encoder
     for ext in ${ENCODING_VECTOR:=mpc}; do
-        case "$ext" in mpc) encoder="mpcenc" ;; flac) encoder="flac" ;;
-                       mp3) encoder="lame" ;;
-        esac
+        case "$ext" in mpc) encoder="mpcenc" ;; flac) encoder="flac" ;; mp3) encoder="lame" ;; esac
         if ! is_binary "$encoder"; then
            logger_error "Couldn't find suitable '${ext}' encoder ('${encoder}'), removing it from the encoding vector"
            __remove "$ext" ENCODING_VECTOR
@@ -722,7 +720,7 @@ while argp_parse /options="u:use-local-cddb:0:Use cddb cache
                            mpc:mpc:0:Use the musepack encoder <mpc>
                            mp3:mp3:0:Use the lame encoder <mp3>
                            flac:flac:0:Use the flac encoder <flac>
-                           o:oputdir:1@path:Set the output sound directory
+                           o:output-dir:1@path:Set the output sound directory
                            B:batch:0:Encode in separate files
                            S:single:0:Encode in a single file
                            n:naming-mask:1:Specify the naming mask to use
@@ -746,7 +744,7 @@ do
               ;;
            d) CDROM_DEVICE="$_optarg" ;;
            c) . "$_optarg"            ;;
-mpc|mp3|flac) __accumulate "$_opt" ENCODING_VECTOR
+mpc|mp3|flac) __accumulate_once "$_opt" ENCODING_VECTOR
               ;;
            o) OUTPUT_DIRECTORY="$_optarg"
               ;;

@@ -99,6 +99,7 @@ __options_set() {
                    t:template:1@path:
                    f:file@:1:
                    c:config:1@key-value-path:
+                   D:define@:1@key-value-string:
                    V:verbose!:0:
                    v:version:0:
                    h:help:0:"
@@ -144,7 +145,7 @@ __should_report_the_following() {
 }
 #
 __should_report_wrong_negatable_option_definition_test() {
-    __should_report_the_following "wrong_negatable_option_definition" "$(__err_negatable_option_definition_set)" "$__err_negatable_option_definition"
+   __should_report_the_following "wrong_negatable_option_definition" "$(__err_negatable_option_definition_set)" "$__err_negatable_option_definition"
 }
 __should_report_wrong_incremental_option_definition_test() {
     __should_report_the_following "wrong_incremental_option_definition" "$(__err_incremental_option_definition_set)" "$__err_incremental_option_definition"
@@ -155,7 +156,7 @@ __should_report_missing_type_check_function_test() {
 #
 __should_build_optstring_accordingly_test() {
     local test_name=should_build_optstring_accordingly
-    local expected="um:Xs:d:t:f:c:Vvh"
+    local expected="um:Xs:d:t:f:c:D:Vvh"
     local stdout
     stdout="$(__run_argp_parse_repeatedly /options="$(__options_set)"
               if [ "$__optstring" != "$expected" ]; then
@@ -642,6 +643,31 @@ __should_parse_mixed_long_and_short_options_test() {
           return 1 ;;
        *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return 1 ;;
+    esac
+}
+#
+__should_parse_multiple_key_value_option_arguments_test() {
+    local test_name=should_parse_multiple_key_value_option_arguments
+    local expected_arguments="key1=/d/a#/d/b key2=1#2"
+    local expected_option_code="@D"
+    local stdout
+    stdout="$(__run_argp_parse_repeatedly /options="$(__options_set)" /argument-separator="#" -D "key1=/d/a" -D "key2=1" -D "key1=/d/b" -D "key2=2"
+              case "$_test" in
+                 @D) echo "$_testarg" ;;
+                  *) echo "$_test"
+                     return 1 ;;
+              esac)"
+    case "$?" in
+       0) if [ "$stdout" = "$expected_arguments" ]; then
+             logger_unconditionally "test ${test_name} succeeds"
+          else
+             logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
+             return 1
+          fi ;;
+       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+          return 1 ;;
+       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+          return 1;;
     esac
 }
 # Brief

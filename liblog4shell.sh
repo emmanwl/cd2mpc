@@ -242,7 +242,7 @@ if [ -f "<__liblog4shellrc__>" ]; then
    . "<__liblog4shellrc__>"
 fi
 #
-__configure_logger() {
+__configure() {
     while [ ${#} -gt 0 ]; do
         case "${1%%=*}" in
            --console-appender) __console_appender="$(__get_console_appender "$(__first_not_empty "${1#*=}" "$2")")" ;;
@@ -255,5 +255,5 @@ __configure_logger() {
     done
 }
 
-__configure_logger --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="%M"}" "$@"
+__configure --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="%M"}" "$@"
 

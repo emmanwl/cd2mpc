@@ -52,10 +52,9 @@ is_path() { __is_path "$1"; }
 __options_set() {
     local options="I:install-dir:1@path:Specify the install directory <install-dir>
                    r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
-                   i:install@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the <install-dir>
-                   D:define:1@key-value:Specify a search/replacement pattern (<__KEY__>/<VALUE>) within the key/value pair <KEY>=<VALUE>
-                   c:dot-file:1@key-value-path:Install, as a dotfile, the file located in the current directory and whose basename is 'KEY' to the target directory path 'VALUE'
-                   t:test@:1:Install the file located in <resources-dir> and whose basename is provided as an argument to the test directory
+                   s:search-replace:1@key-value:Specify a search/replacement pattern (<__KEY__> replaced by <VALUE>) within a key/value pair (<KEY>=<VALUE>)
+                   D:define@:1@key-value:Specify additively a key/value mapping within a key/values pair (<KEY>=<VALUE1,VALUE2,...>)
+                   c:dot-file:1@key-value-path:Install, as a dot-file, the <resources-dir> file whose basename is 'KEY' to the location denoted by 'VALUE'
                    v:version:0:Print version information and exit
                    h:help:0:Print help information and exit"
     printf "%s" "$options"
@@ -74,9 +73,9 @@ ${__shell#\./} parses files named '*.sh' or '*rc' in the <resources-directory> a
 match predefined test/install/check tasks.
 
 These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
---define KEY=<VALUE> switch. '*rc' resources can be marked as dotfiles within the special switch --dot-file 
-<KEY>=<VALUE> where <KEY> denotes the actual file basename (minus the leading '.') and <VALUE> the targeted
-directory path.
+--search-replace KEY=<VALUE> switch. '*rc' resources can be marked as dot-files within the special switch
+--dot-file <KEY>=<VALUE> where <KEY> denotes the actual file basename (minus the leading '.') and <VALUE>
+the targeted directory path.
 
 Type ${__shell} -h for configuration options.
 
@@ -86,8 +85,8 @@ Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh } l
 libscript<1|2>.sh being referenced in those resources within the pattern '<__libdir__>/libscript<1|2>.sh',
 the command:
 
-${__shell} --resources-dir=. --define libdir=${HOME}/libscript --install-dir ${HOME}/bin --test=libscript1test.sh
---install=script.sh --dot-file scriptrc=${HOME} would generate a makefile from which:
+${__shell} --resources-dir=. --search-replace libdir=${HOME}/libscript --install-dir ${HOME}/bin --define TEST=libscript1test.sh
+--define INSTALL=script.sh --dot-file scriptrc=${HOME} would generate a makefile from which:
 
 - 'make install' will build the following file tree:
   {
@@ -348,7 +347,7 @@ __makefile() {
       printf "clean:\n"
       printf "\t@rm -rf makefile \$(WRKDIR)\n"
     } > makefile 2>/dev/null
-    test -f makefile 2>/dev/null
+    test -s makefile 2>/dev/null
 }
 # Brief
 # Check whether ${1} denotes a resolvable path
@@ -356,24 +355,21 @@ is_real_path() {
     realpath "$1" >/dev/null 2>&1
 }
 # Brief
-# Parse command line arguments and map them using
-# the long option name as the key and the option
-# argument as the value.
+# Parse command line arguments.
 __parse_options() {
-    local argv key
-    while __argp_parse /options="$(__options_set)" /filter-args-to-uniqueness /callback-option-prefix=_opt /required-options="I,i,r" "$@"
+    local argv
+    while __argp_parse /options="$(__options_set)" /trim-option-arguments-to-uniqueness /callback-option-prefix=_opt /required-options="I,i,r" "$@"
     do
         case "$_opt" in
-               h) __argp_parse_opts_help
-                  return ${E_EXIT}                                                       ;;
-               v) __print_version
-                  return ${E_EXIT}                                                       ;;
-               r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
-               I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
-             \@i) __accumulate "INSTALL=${_optarg}" argv                                 ;;
-             \@t) __accumulate "TEST=${_optarg}" argv                                    ;;
-               D) __accumulate_once "$_optarg" argv                                      ;;
-               c) __accumulate_once "${_optarg%%=*}=${_optarg#*=}/.${_optarg%%=*}" argv  ;;
+                    h) __argp_parse_opts_help
+                       return ${E_EXIT}                                                       ;;
+                    v) __print_version
+                       return ${E_EXIT}                                                       ;;
+                    r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
+                    I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
+                  \@D) __accumulate "$_optarg" argv                                           ;;
+                    s) __accumulate_once "$_optarg" argv                                      ;;
+                    c) __accumulate_once "${_optarg%%=*}=${_optarg#*=}/.${_optarg%%=*}" argv  ;;
         esac
     done
     printf "%s" "$argv"
@@ -381,7 +377,7 @@ __parse_options() {
 #
 __configure () {
     local argv r
-    argv="$(__parse_options $@)"
+    argv="$(__parse_options "$@")"
     if [ ${r:=${?}} -eq ${E_EXIT} ]; then
        return ${E_SUCCESS}
     elif [ ${r} -ne ${E_SUCCESS} ]; then
@@ -392,4 +388,4 @@ __configure () {
     fi
 }
 
-__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --define libdir=${HOME}/libs4shell --define libtools=${HOME}/libs4shell/libtools --test=libopt4test.sh --install=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell
