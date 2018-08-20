@@ -701,6 +701,8 @@ Example:
 
 Type ${__shell} -h or ${__shell} --help for the usage information.
 
+Please report bugs or suggestions to emmanwl@gmail.com.
+
 version
 }
 # Set interceptors

@@ -366,7 +366,7 @@ __set_option_and_argument() {
 }
 #
 __set_callback_option_and_argument() {
-    read -- ${_callback_opt} ${_callback_opt}arg<<EOF
+    read -r -- ${_callback_opt} ${_callback_opt}arg<<EOF
 ${1} ${2}
 EOF
     __set_option_and_argument "" ""
@@ -429,7 +429,7 @@ ___decode() {
 __decode() {
     local arg r
     ___decode "$2" && { r=0; arg="$3"; } || { r=1; arg="$4"; }
-    read -- $1<<EOF
+    read -r -- $1<<EOF
 ${arg}
 EOF
     return ${r}
@@ -884,7 +884,7 @@ __remove_entry_from_string_with_separator() {
            fi
        done
        if ${has_entry}; then
-          read -- "$result"<<EOF
+          read -r -- "$result"<<EOF
 ${_options}
 EOF
           return 1

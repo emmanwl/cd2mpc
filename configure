@@ -38,19 +38,23 @@ __bootstrap "libopt4shell.sh" || exit ${E_FAILURE}
 
 # Shell name
 __shell="$(__get_calling_shell_name "$0")"
-# Brief
-# Extract configure body.
+# **
+# * Extract configure body line number.
+# * @print the line number, in the present file, of the line preceding the script payload
+# */
 __extract_configure_line_number_minus_one() {
     sed -n "/[[:space:]]*__configure[[:space:]]\{1,\}[^(]/=" ${0} 2>/dev/null | awk 'END {print (NR==1) ? $NF - 1 : "$"}'
 }
-# Brief
-# Implementation for the type interface.
+# **
+# * Implementation for the type interface.
+# * @param ${1} the candidate string to check
+# */
 is_string() { __is_of_match "$1" "[[:print:]]+"; }
 is_path() { __is_path "$1"; }
-# Brief
 # Define options set.
 __options_set() {
     local options="I:install-dir:1@path:Specify the install directory <install-dir>
+                   m:man-page-dir:1@path:Specify the man page directory <man-page-dir> where to copy *.sh.manpage.gz resources
                    r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
                    s:search-replace:1@key-value:Specify a search/replacement pattern (<__KEY__> replaced by <VALUE>) within a key/value pair (<KEY>=<VALUE>)
                    D:define@:1@key-value:Specify additively a key/value mapping within a key/values pair (<KEY>=<VALUE1,VALUE2,...>)
@@ -59,18 +63,20 @@ __options_set() {
                    h:help:0:Print help information and exit"
     printf "%s" "$options"
 }
-# Brief
-# Print version information.
+# **
+# * Print version information.
+# */
 __print_version() {
 cat <<version >&2
 
-This is ${__shell#\./} v${CONFIGURE_VERSION}.
-${__shell#\./} is a cli tool that automates test/install tasks for shell projects. A shell project refers to a
-collection of scripts (*.sh) and configuration files (*rc) referencing parametrized paths. The tool aims at
-testing and installing any number of scripts in a centralized way.
+This is ${__shell#\./} v${CONFIGURE_VERSION}, a cli tool that automates test/install/check/document tasks for shell projects. 
 
-${__shell#\./} parses files named '*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals
-match predefined test/install/check tasks.
+A shell project refers to a collection of scripts (*.sh) and configuration files (*rc) both of which
+referencing parametrized paths. 
+
+The tool aims at testing and installing any number of scripts in a centralized way: it parses files named
+'*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals match predefined 
+test/install/check/document tasks.
 
 These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
 --search-replace KEY=<VALUE> switch. '*rc' resources can be marked as dot-files within the special switch
@@ -81,12 +87,16 @@ Type ${__shell} -h for configuration options.
 
 Example:
 
-Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh } lying in the current directory,
-libscript<1|2>.sh being referenced in those resources within the pattern '<__libdir__>/libscript<1|2>.sh',
-the command:
-
-${__shell} --resources-dir=. --search-replace libdir=${HOME}/libscript --install-dir ${HOME}/bin --define TEST=libscript1test.sh
---define INSTALL=script.sh --dot-file scriptrc=${HOME} would generate a makefile from which:
+Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh, script.sh.manpage.gz },
+libscriptX.sh being referenced in those resources within the pattern '<__libdir__>/libscriptX.sh',
+the command: ${__shell} --resources-dir=. 
+                         --search-replace libdir=${HOME}/libscript 
+                         --install-dir ${HOME}/bin 
+                         --define TEST=libscript1test.sh
+                         --define INSTALL=script.sh 
+                         --dot-file scriptrc=${HOME} 
+                         --man-page-dir ${HOME}/.local/share/man
+would generate a makefile from which:
 
 - 'make install' will build the following file tree:
   {
@@ -94,6 +104,7 @@ ${__shell} --resources-dir=. --search-replace libdir=${HOME}/libscript --install
     ~/.scriptrc
     ~/libscript/libscript1.sh
     ~/libscript/libscript2.sh
+    ~/.local/share/man/man1/script.sh.manpage.gz
   }
 
 - 'make check' would span a new shell to run shellcheck on script.sh in a best-effort mode
@@ -104,9 +115,13 @@ ${__shell} --resources-dir=. --search-replace libdir=${HOME}/libscript --install
 
 version
 }
-# Brief
-# Return the value associated to the first key that
-# matches ${1} in ${@}.
+# **
+# * Retrieve the first value associated to the given key.
+# * @param ${1} the key to look for
+# * @param ${2,} the remaining key/value associations
+# * @print the value associated to the key in ${2,}
+# * @return ${E_SUCCESS} if the key was found else ${E_FAILURE}
+# */
 __get_key_value() {
     local key="$(__lowerize "$1")" entry value
     shift
@@ -120,7 +135,12 @@ __get_key_value() {
     done
     return ${E_FAILURE}
 }
-#
+# **
+# * Build a search/replace expression to use within source files to replace 
+# * each key parameter with its value.
+# * @param ${@} the whole argument vector
+# * @print the search/replace expression
+# */
 __source_replace_expression() {
     local entry expression
     for entry in ${@}; do
@@ -134,7 +154,12 @@ __source_replace_expression() {
     done
     printf "%s" "$expression"
 }
-#
+# **
+# * Build a search/replace expression to use within test files to replace 
+# * each key parameter with its value.
+# * @param ${@} the whole argument vector
+# * @print the search/replace expression
+# */
 __test_replace_expression() {
     local entry expression wrkdir="$(__get_key_value "WRKDIR" "$@")"
     for entry in ${@}; do
@@ -154,9 +179,12 @@ __test_replace_expression() {
     done
     printf "%s" "$expression"
 }
-# Brief
-# List *.sh (excluding potentially *test.sh)
-# and *rc files.
+# **
+# * Retrieve shell/rc filenames in the resource directory.
+# * @param ${@} the whole argument vector
+# * @param ${1} an option indicating whether to exclude or not test (*test.sh) files in the current lookup
+# * @print the filenames matching either the mask *.sh or *rc
+# */
 __list_files_accordingly() {
     local exclude_tests=false file test match=false
     local resourcesdir="$(__get_key_value "RESOURCES_DIR" "$@")"
@@ -181,43 +209,60 @@ __list_files_accordingly() {
         fi
     done
 }
-#
+# **
+# * Copy resources to the target directory.
+# * @param ${@} the whole argument vector
+# */
 __copy_files() {
     __list_files_accordingly "$@" | xargs -I{} cp {} "$(__get_key_value "TARGETDIR" "$@")"
 }
-#
+# **
+# * Copy source files, excluding tests *test.sh, to the target directory.
+# * @param ${@} the whole argument vector
+# */
 copy_sources() {
     __copy_files --exclude-tests "$@"
 }
-#
+# **
+# * Copy source files, including tests, to the target directory.
+# * @param ${@} the whole argument vector
+# */
 copy_tests() {
     __copy_files "$@"
 }
-# Brief
-# Edit in place *.sh and *rc files to substitute
-# specified patterns with user defined values.
+# **
+# * Edit in place source files to substitute specified patterns with their corresponding values.
+# * @param ${@} the whole argument vector
+# */
 filter_sources() {
     local wrkdir="$(__get_key_value "WRKDIR" "$@")"
     perl -i -pe "$(__source_replace_expression "$@")" "${wrkdir}/install/"* 2>/dev/null
     local key="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "${wrkdir}/install/"* 2>/dev/null | head -n1)"
     if [ "$key" ]; then
-       printf "Configure failed: found at least one resource holding a unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
+       printf "Configure failed: found at least one unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
        return ${E_FAILURE}
     fi
     return ${E_SUCCESS}
 }
-#
+# **
+# * Edit in place test files to substitute specified patterns with their corresponding values.
+# * @param ${@} the whole argument vector
+# */
 filter_tests() {
     local wrkdir="$(__get_key_value "WRKDIR" "$@")"
     perl -i -pe "$(__test_replace_expression "$@")" "${wrkdir}/test/"* 2>/dev/null
     local key="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "${wrkdir}/test/"* 2>/dev/null | head -n1)"
     if [ "$key" ]; then
-       printf "Configure failed: found at least one resource holding a unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
+       printf "Configure failed: found at least one unresolved pattern: <__${key}__>; reconfigure with --key-value ${key}=<VALUE>\n" >&2
        return ${E_FAILURE}
     fi
     return ${E_SUCCESS}
 }
-#
+# **
+# * Build a search expression that looks in *.sh files for <keys> defined in ${@}
+# * @param ${@} the whole argument vector
+# * @print the search expression to use within GREP
+# */
 __shell_search_pattern() {
     local expression entry
     for entry in ${@}; do
@@ -232,7 +277,11 @@ __shell_search_pattern() {
     done
     printf "%s" "(/{1,}\w{1,}/)*(${expression})/{1,}(\w{1,}/{1,})*\w{1,}\.sh"
 }
-#
+# **
+# * Build a search expression that looks in *rc files for <keys> defined in ${@}
+# * @param ${@} the whole argument vector
+# * @print the search expression to use within GREP
+# */
 __configuration_file_search_pattern() {
    local expression entry
    for entry in ${@}; do
@@ -247,12 +296,16 @@ __configuration_file_search_pattern() {
    done
    printf "%s" "(/{1,}\w{1,}/)*(${expression})"
 }
-# Brief
-# Evaluate paths before sorting them
-# to unicity.
+# **
+# * Evaluate paths, doing required search/replace patterns operations, before sorting them to uniqueness.
+# * @param ${@} the whole argument vector
+# * @print the evaluated paths, one per line, sorted to uniqueness
+# */
 __render_paths() { sed "$(__source_replace_expression "$@");s#/\{2,\}#/#g" | sort -u ; }
-# Brief
-# Install target directory layout.
+# **
+# * Build the target directory layout.
+# * @param ${@} the whole argument vector
+# */
 build_layout() {
     local wrkdir="$(__get_key_value "WRKDIR" "$@")" resource install_dir="$(__get_key_value "INSTALL_DIR" "$@")" basename
     #
@@ -275,8 +328,39 @@ build_layout() {
       done
     } | awk '!commands[$0]++' | xargs -t -n5 install
 }
-# Brief
-# Build makefile.
+# **
+# * Copy man pages in a directory, ~/.local/share/man by default, scanned when such a page is
+# * manually invoked, see MANPATH in ~/.profile.
+# * @param ${@} the whole argument vector
+# */
+copy_man_pages() {
+    local man_page_dir="$(__get_key_value "MAN_PAGE_DIR" "$@")" profile="${HOME}/.profile"
+    local value
+    if [ "{$man_page_dir:=${HOME}/.local/share/man}" ]; then
+       if grep -wE "MANPATH=:*" "$profile" >/dev/null; then
+          perl -i -pe "s#MANPATH=.*#MANPATH=\":${man_page_dir}\"#g" "$profile"
+       else
+          {
+	    echo
+            echo "#enrich man page lookup path"
+            echo "export MANPATH=:${man_page_dir}"
+          } >> "$profile"
+       fi
+       {
+         for value in $(__get_key_value "INSTALL" "$@"); do
+             if [ -s "${value}.manpage.gz" ]; then
+                echo -c -m 755 -d "${man_page_dir}/man1"
+                echo -c -m 644 "${value}.manpage.gz" "${man_page_dir}/man1/${value}.1.gz"
+             fi
+         done
+       } | awk '!commands[$0]++' | xargs -t -n5 install
+    fi
+}
+# **
+# * Generate in the current directory a makefile configured with user options.
+# * @param ${@} the whole argument vector
+# * @return 0 if the generated makefile is not empty else a non-zero value 
+# */
 __makefile() {
     local wrkdir="/tmp/target" value resource basename associate
     {
@@ -285,6 +369,7 @@ __makefile() {
       printf "RESOURCES_DIR = "$(__get_key_value "RESOURCES_DIR" "$@")"\n"
       printf "WRKDIR = ${wrkdir}\n"
       printf "INSTALL_DIR = "$(__get_key_value "INSTALL_DIR" "$@")"\n"
+      printf "MAN_PAGE_DIR = "$(__get_key_value "MAN_PAGE_DIR" "$@")"\n"
       printf "INSTALL = /usr/bin/install -c\n"
       printf "\n"
       printf "target:\n"
@@ -325,7 +410,7 @@ __makefile() {
       {
         for value in $(__get_key_value "INSTALL" "$@"); do
             if [ -f "$value" ]; then
-               printf "\t@shellcheck \$(WRKDIR)/install/${value} || { echo Check: shellcheck exited with a non-zero status when checking ${value}; }\n"
+               printf "\t@shellcheck -x \$(WRKDIR)/install/${value} || { echo Check: shellcheck exited with a non-zero status when checking ${value}; return 1; }\n"
             fi
         done
       }
@@ -339,7 +424,12 @@ __makefile() {
         done
       } | sort -R
       printf "\n"
-      printf "install: filter_sources\n"
+      printf "copy_man_pages:\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_man_pages\n"
+      printf "\t@echo copy_man_pages \$(CONFIGURE_ARGS) >> \$(WRKDIR)/copy_man_pages\n"
+      printf "\t@sh \$(WRKDIR)/copy_man_pages\n"
+      printf "\n"
+      printf "install: filter_sources copy_man_pages\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/build_layout\n"
       printf "\t@echo build_layout WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS) >> \$(WRKDIR)/build_layout\n"
       printf "\t@sh \$(WRKDIR)/build_layout\n"
@@ -349,13 +439,18 @@ __makefile() {
     } > makefile 2>/dev/null
     test -s makefile 2>/dev/null
 }
-# Brief
-# Check whether ${1} denotes a resolvable path
+# **
+# * Check whether ${1} denotes an existing filepath.
+# * @param ${1} the filepath to check
+# * @return 0 if ${1} denotes an existing filepath else a non-zero value
+# */
 is_real_path() {
     realpath "$1" >/dev/null 2>&1
 }
-# Brief
-# Parse command line arguments.
+# **
+# * Parse command line arguments.
+# * @print a vector holding user configured options
+# */
 __parse_options() {
     local argv
     while __argp_parse /options="$(__options_set)" /trim-option-arguments-to-uniqueness /callback-option-prefix=_opt /required-options="I,i,r" "$@"
@@ -367,14 +462,19 @@ __parse_options() {
                        return ${E_EXIT}                                                       ;;
                     r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
                     I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
-                  \@D) __accumulate "$_optarg" argv                                           ;;
+                  \@D) __accumulate_once "$_optarg" argv                                      ;;
                     s) __accumulate_once "$_optarg" argv                                      ;;
                     c) __accumulate_once "${_optarg%%=*}=${_optarg#*=}/.${_optarg%%=*}" argv  ;;
+                    m) __accumulate_once "MAN_PAGE_DIR=${_optarg}" argv                       ;;
         esac
     done
     printf "%s" "$argv"
 }
-#
+# **
+# * Script payload.
+# * @param ${@} the whole argument vector
+# * @return ${E_SUCCESS} if called with a terminal option (-h, -v or alternatively --help, --version) or if the makefile was properly generated, else ${E_FAILURE}
+# */
 __configure () {
     local argv r
     argv="$(__parse_options "$@")"
@@ -388,4 +488,4 @@ __configure () {
     fi
 }
 
-__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell --man-page-dir ${HOME}/.local/share/man
