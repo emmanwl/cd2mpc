@@ -1,7 +1,8 @@
 #@IgnoreInspection BashAddShebang
 # Brief
-# Source input resources in the
-# current execution environment.
+# Source input resource in the
+# current execution environment
+# and fail if it was not found.
 __import_resource_or_fail() {
    local resource="$1"
    shift
@@ -10,6 +11,17 @@ __import_resource_or_fail() {
    else
       printf "Import failed: missing required dependency ${resource##*/} in ${resource%/*}, exiting\n" >&2
       exit 1
+   fi
+   return 0
+}
+# Brief
+# Source input resource in the
+# current execution environment.
+__import_resource_if_exists() {
+   local resource="$1"
+   shift
+   if [ -f "$resource" ]; then
+      . "$resource" "$@"
    fi
    return 0
 }

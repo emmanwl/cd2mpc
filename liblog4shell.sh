@@ -34,12 +34,13 @@ __shell="$(__get_calling_shell_name "$0")"
 # - P (the pid of the current process)
 # - % (the literal percent sign '%')
 #
-__pattern_layout="%D - {%H} - [%L] - %F | %M"
+__default_pattern_layout="%D - {%H} - [%L] - %F - %M"
+__pattern_layout=
 #
 # The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
 # <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
 # severity (or above) will be logged.
-__log_level="DEBUG"
+__log_level=
 #
 # Brief
 # Zero-pad logger entries.
@@ -67,8 +68,8 @@ __get_logger_format() {
                  esac                                              ;;
               *) expr="${layout%"${layout#?}"}"
                  case "$expr" in
-                     \)|\(|\|) expr="'${expr}'"                    ;;
-                          " ") expr=" "                            ;;
+                           \)|\(|\|) expr="'${expr}'"              ;;
+                                " ") expr=" "                      ;;
                  esac                                              ;;
         esac
         layout="${layout#?}"
@@ -86,15 +87,15 @@ __get_logger_format() {
 }
 #
 # File appender
-__file_appender="/tmp"
-__append_per_level=false
+__file_appender=
+__append_per_level=
 #
 # Console appender
-__console_appender="/dev/null"
+__console_appender=
 # Brief
 # Get the file appender.
 __get_file_appender() {
-    local appender="${1:="/dev/null"}"
+    local appender="${1:-"/dev/null"}"
     if [ -d "$appender" -a -w "$appender" ]; then
        appender="${appender}/${__shell}.log"
     elif [ -d "$(dirname "$appender")" -a -w "$(dirname "$appender")" ]; then
@@ -209,7 +210,7 @@ __logger_internal() {
     if [ ${#} -gt 0 ]; then
        message="$(printf "${message}\n${@}")"
     fi
-    printf "$(eval echo ${__logger_format})\n" "$message"
+    printf "$(eval echo "$__logger_format")\n" "$message"
     return 0
 }
 # Brief
@@ -238,10 +239,6 @@ __append_to_console() {
     tee -a "$__console_appender" 2>/dev/null
 }
 #
-if [ -f "<__liblog4shellrc__>" ]; then
-   . "<__liblog4shellrc__>"
-fi
-#
 __configure() {
     while [ ${#} -gt 0 ]; do
         case "${1%%=*}" in
@@ -254,6 +251,4 @@ __configure() {
         shift
     done
 }
-
-__configure --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="%M"}" "$@"
-
+__configure --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="$__default_pattern_layout"}" "$@"

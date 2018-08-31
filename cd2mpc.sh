@@ -25,6 +25,7 @@ E_FAILURE=1
 E_SIG_INT=128
 
 . "<__libtools__>/imports.sh" 2>/dev/null
+__import_resource_if_exists "<__cd2mpcrc__>"
 __import_resource_or_fail "<__libdir__>/liboptwrapper.sh"
 __import_resource_or_fail "<__libdir__>/liblog4shell.sh"
 stty -echo 2>/dev/null
@@ -710,7 +711,6 @@ trap 'upon_interrupt; exit' TERM INT QUIT
 trap 'release_resources' EXIT
 #
 # Parse options
-[ -f "<__cd2mpcrc__>" ] && . "<__cd2mpcrc__>"
 while argp_parse /options="u:use-local-cddb:0:Use cddb cache
                            j:max-proc:1@integer:Specify max allowed encoding processes
                            E:eject:0:Eject cd from tray when done

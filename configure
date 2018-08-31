@@ -54,7 +54,7 @@ is_path() { __is_path "$1"; }
 # Define options set.
 __options_set() {
     local options="I:install-dir:1@path:Specify the install directory <install-dir>
-                   m:man-page-dir:1@path:Specify the man page directory <man-page-dir> where to copy *.sh.manpage.gz resources
+                   m:man-page-dir:1@path:Specify the man page directory <man-page-dir> where to copy man pages
                    r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
                    s:search-replace:1@key-value:Specify a search/replacement pattern (<__KEY__> replaced by <VALUE>) within a key/value pair (<KEY>=<VALUE>)
                    D:define@:1@key-value:Specify additively a key/value mapping within a key/values pair (<KEY>=<VALUE1,VALUE2,...>)
@@ -69,14 +69,12 @@ __options_set() {
 __print_version() {
 cat <<version >&2
 
-This is ${__shell#\./} v${CONFIGURE_VERSION}, a cli tool that automates test/install/check/document tasks for shell projects. 
+This is ${__shell#\./} v${CONFIGURE_VERSION}, a cli tool that automates test/install/check/document tasks for Shell projects.
 
-A shell project refers to a collection of scripts (*.sh) and configuration files (*rc) both of which
-referencing parametrized paths. 
-
-The tool aims at testing and installing any number of scripts in a centralized way: it parses files named
-'*.sh' or '*rc' in the <resources-directory> and produce a makefile whose goals match predefined 
-test/install/check/document tasks.
+The tool aims at testing and installing Shell projects in a centralized way: it parses any collection of
+scripts (*.sh) or configuration files (*rc), in the <resources-directory>, which do reference parametrized
+paths (<__PATH__>) to be valorized with the user input. It produces, at time of invokation, a makefile whose
+goals match those predefined test/install/check/document tasks.
 
 These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
 --search-replace KEY=<VALUE> switch. '*rc' resources can be marked as dot-files within the special switch
@@ -110,6 +108,8 @@ would generate a makefile from which:
 - 'make check' would span a new shell to run shellcheck on script.sh in a best-effort mode
 
 - 'make test' would spawn a new shell to run libscript1test.sh
+
+- 'make doc' would deploy script man page (script.sh.manpage.gz) to the man pages user directory
 
 - 'make clean' would leave the place clean (wiping out temporary files) before removing the makefile itself.
 
@@ -342,8 +342,8 @@ copy_man_pages() {
        else
           {
 	    echo
-            echo "#enrich man page lookup path"
-            echo "export MANPATH=:${man_page_dir}"
+            echo "# enrich man page lookup path"
+            echo "export MANPATH=\":${man_page_dir}\""
           } >> "$profile"
        fi
        {
@@ -359,7 +359,7 @@ copy_man_pages() {
 # **
 # * Generate in the current directory a makefile configured with user options.
 # * @param ${@} the whole argument vector
-# * @return 0 if the generated makefile is not empty else a non-zero value 
+# * @return 0 if the generated makefile is not empty else a non-zero value
 # */
 __makefile() {
     local wrkdir="/tmp/target" value resource basename associate
@@ -424,12 +424,12 @@ __makefile() {
         done
       } | sort -R
       printf "\n"
-      printf "copy_man_pages:\n"
+      printf "doc:\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_man_pages\n"
       printf "\t@echo copy_man_pages \$(CONFIGURE_ARGS) >> \$(WRKDIR)/copy_man_pages\n"
       printf "\t@sh \$(WRKDIR)/copy_man_pages\n"
       printf "\n"
-      printf "install: filter_sources copy_man_pages\n"
+      printf "install: filter_sources doc\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/build_layout\n"
       printf "\t@echo build_layout WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS) >> \$(WRKDIR)/build_layout\n"
       printf "\t@sh \$(WRKDIR)/build_layout\n"
@@ -488,4 +488,4 @@ __configure () {
     fi
 }
 
-__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --dot-file liblog4shellrc=${HOME}/libs4shell --man-page-dir ${HOME}/.local/share/man
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --man-page-dir ${HOME}/.local/share/man
