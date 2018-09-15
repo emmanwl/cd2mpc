@@ -17,12 +17,13 @@
 #@(#)
 #@(#) This is libopt4test, a test suite for the libopt4shell API.
 
-. "<__libtools__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libdir__>/libopt4shell.sh"
-__import_resource_or_fail "<__libdir__>/liblog4shell.sh" --file-appender=/dev/null
+. "<__libs4shell__>/imports.sh" 2>/dev/null
+__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
+__import_resource_or_fail "<__libs4shell__>/libopt4shell.sh"
+__import_resource_or_fail "<__libs4shell__>/liblog4shell.sh" --file-appender=/dev/null
 
 # Shell name
-__shell="$(__get_calling_shell_name "$0")"
+__shell="$(__get_shell_name "$0")"
 # Brief
 # Implementation for the type interface.
 is_string() { __is_of_match "$1" "[[:print:]]+"; }

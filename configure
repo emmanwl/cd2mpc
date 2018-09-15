@@ -37,7 +37,7 @@ __bootstrap() {
 __bootstrap "libopt4shell.sh" || exit ${E_FAILURE}
 
 # Shell name
-__shell="$(__get_calling_shell_name "$0")"
+__shell="$(__get_shell_name "$0")"
 # **
 # * Extract configure body line number.
 # * @print the line number, in the present file, of the line preceding the script payload
@@ -86,7 +86,7 @@ Type ${__shell} -h for configuration options.
 Example:
 
 Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh, script.sh.manpage.gz },
-libscriptX.sh being referenced in those resources within the pattern '<__libdir__>/libscriptX.sh',
+libscriptX.sh being referenced within the pattern '<__libdir__>/libscriptX.sh',
 the command: ${__shell} --resources-dir=. 
                          --search-replace libdir=${HOME}/libscript 
                          --install-dir ${HOME}/bin 
@@ -136,44 +136,42 @@ __get_key_value() {
     return ${E_FAILURE}
 }
 # **
-# * Build a search/replace expression to use within source files to replace 
-# * each key parameter with its value.
+# * Build a search/replace expression to use within source files to replace each key parameter with its value.
 # * @param ${@} the whole argument vector
 # * @print the search/replace expression
 # */
 __source_replace_expression() {
     local entry expression
     for entry in ${@}; do
-        if [ ! "${entry##*=*}" ]; then
+        if [ ! "${entry##__*__=*}" ]; then
            if [ "$expression" ]; then
-              expression="${expression};s#<__${entry%%=*}__>#${entry#*=}#g"
+              expression="${expression};s#<${entry%%=*}>#${entry#*=}#g"
            else
-              expression="s#<__${entry%%=*}__>#${entry#*=}#g"
+              expression="s#<${entry%%=*}>#${entry#*=}#g"
            fi
         fi
     done
     printf "%s" "$expression"
 }
 # **
-# * Build a search/replace expression to use within test files to replace 
-# * each key parameter with its value.
+# * Build a search/replace expression to use within test files to replace each key parameter with its value.
 # * @param ${@} the whole argument vector
 # * @print the search/replace expression
 # */
 __test_replace_expression() {
     local entry expression wrkdir="$(__get_key_value "WRKDIR" "$@")"
     for entry in ${@}; do
-        if [ ! "${entry##*=*}" ]; then
+        if [ ! "${entry##__*__=*}" ]; then
            if [ "$expression" ]; then
               if [ ! "${entry##*\.*}" ]; then
-                 expression="${expression};s#<__${entry%%=*}__>#${wrkdir}/test/${entry##*/\.}#g"
+                 expression="${expression};s#<${entry%%=*}>#${wrkdir}/test/${entry##*/\.}#g"
               else
-                 expression="${expression};s#<__${entry%%=*}__>#${wrkdir}/test#g"
+                 expression="${expression};s#<${entry%%=*}>#${wrkdir}/test#g"
               fi
            elif [ ! "${entry##*\.*}" ]; then
-              expression="s#<__${entry%%=*}__>#${wrkdir}/test/${entry##*/\.}#g"
+              expression="s#<${entry%%=*}>#${wrkdir}/test/${entry##*/\.}#g"
            else
-              expression="s#<__${entry%%=*}__>#${wrkdir}/test#g"
+              expression="s#<${entry%%=*}>#${wrkdir}/test#g"
            fi
         fi
     done
@@ -187,13 +185,13 @@ __test_replace_expression() {
 # */
 __list_files_accordingly() {
     local exclude_tests=false file test match=false
-    local resourcesdir="$(__get_key_value "RESOURCES_DIR" "$@")"
+    local resources_dir="$(__get_key_value "RESOURCES_DIR" "$@")"
     local tests="$(__get_key_value "TEST" "$@")"
     case "$1" in
        --exclude-tests) exclude_tests=true; shift ;;
     esac
-    for file in ${resourcesdir}/*.sh ${resourcesdir}/*rc; do
-        if [ "$file" != "${resourcesdir}/*.sh" -a "$file" != "${resourcesdir}/*rc" ]; then
+    for file in ${resources_dir}/*.sh ${resources_dir}/*rc; do
+        if [ "$file" != "${resources_dir}/*.sh" -a "$file" != "${resources_dir}/*rc" ]; then
            match=false
            for test in ${tests}; do
                if [ "$test" = "$(basename "$file")" ]; then
@@ -213,22 +211,22 @@ __list_files_accordingly() {
 # * Copy resources to the target directory.
 # * @param ${@} the whole argument vector
 # */
-__copy_files() {
+__copy_resources() {
     __list_files_accordingly "$@" | xargs -I{} cp {} "$(__get_key_value "TARGETDIR" "$@")"
 }
 # **
 # * Copy source files, excluding tests *test.sh, to the target directory.
 # * @param ${@} the whole argument vector
 # */
-copy_sources() {
-    __copy_files --exclude-tests "$@"
+copy_sources_only() {
+    __copy_resources --exclude-tests "$@"
 }
 # **
 # * Copy source files, including tests, to the target directory.
 # * @param ${@} the whole argument vector
 # */
-copy_tests() {
-    __copy_files "$@"
+copy_resources_for_test() {
+    __copy_resources "$@"
 }
 # **
 # * Edit in place source files to substitute specified patterns with their corresponding values.
@@ -266,14 +264,13 @@ filter_tests() {
 __shell_search_pattern() {
     local expression entry
     for entry in ${@}; do
-        case "${entry%%=*}" in
-           install_dir|test|install|*rc) ;;
-                                      *) if [ ! "$expression" ]; then
-                                            expression="<__${entry%%=*}__>"
-                                         else
-                                            expression="${expression}|<__${entry%%=*}__>"
-                                         fi ;;
-        esac
+        if [ ! "${entry##__*__=*}" ]; then
+           if [ ! "$expression" ]; then
+              expression="<${entry%%=*}>"
+           else
+              expression="${expression}|<${entry%%=*}>"
+           fi
+        fi
     done
     printf "%s" "(/{1,}\w{1,}/)*(${expression})/{1,}(\w{1,}/{1,})*\w{1,}\.sh"
 }
@@ -285,14 +282,13 @@ __shell_search_pattern() {
 __configuration_file_search_pattern() {
    local expression entry
    for entry in ${@}; do
-       case "${entry%%=*}" in
-          install_dir|test|install) ;;
-                               *rc) if [ ! "$expression" ]; then
-                                       expression="<__${entry%%=*}__>"
-                                    else
-                                       expression="${expression}|<__${entry%%=*}__>"
-                                    fi ;;
-       esac
+       if [ ! "${entry##__*rc__=*}" ]; then
+          if [ ! "$expression" ]; then
+             expression="<${entry%%=*}>"
+          else
+             expression="${expression}|<${entry%%=*}>"
+          fi
+       fi
    done
    printf "%s" "(/{1,}\w{1,}/)*(${expression})"
 }
@@ -329,31 +325,25 @@ build_layout() {
     } | awk '!commands[$0]++' | xargs -t -n5 install
 }
 # **
-# * Copy man pages in a directory, ~/.local/share/man by default, scanned when such a page is
-# * manually invoked, see MANPATH in ~/.profile.
+# * Install man pages in a directory, ~/.local/share/man by default, which is to be looked-up upon man invokation, see MANPATH.
 # * @param ${@} the whole argument vector
 # */
-copy_man_pages() {
+install_man_pages() {
     local man_page_dir="$(__get_key_value "MAN_PAGE_DIR" "$@")" profile="${HOME}/.profile"
-    local value
-    if [ "{$man_page_dir:=${HOME}/.local/share/man}" ]; then
+    local shell shells="$(__get_key_value "INSTALL" "$@")"
+    if [ "$shells" ]; then
+       : "${man_page_dir:="${HOME}/.local/share/man"}"
        if grep -wE "MANPATH=:*" "$profile" >/dev/null; then
           perl -i -pe "s#MANPATH=.*#MANPATH=\":${man_page_dir}\"#g" "$profile"
        else
-          {
-	    echo
-            echo "# enrich man page lookup path"
-            echo "export MANPATH=\":${man_page_dir}\""
-          } >> "$profile"
+          printf "\n# enrich man page lookup path\nexport MANPATH=\":${man_page_dir}\"\n" >> "$profile"
        fi
-       {
-         for value in $(__get_key_value "INSTALL" "$@"); do
-             if [ -s "${value}.manpage.gz" ]; then
-                echo -c -m 755 -d "${man_page_dir}/man1"
-                echo -c -m 644 "${value}.manpage.gz" "${man_page_dir}/man1/${value}.1.gz"
-             fi
-         done
-       } | awk '!commands[$0]++' | xargs -t -n5 install
+       for shell in ${shells}; do
+           if [ -s "${shell}.manpage.gz" ]; then
+              echo -c -m 755 -d "${man_page_dir}/man1"
+              echo -c -m 644 "${shell}.manpage.gz" "${man_page_dir}/man1/${shell}.1.gz"
+           fi
+       done | awk '!commands[$0]++' | xargs -t -n5 install
     fi
 }
 # **
@@ -366,8 +356,8 @@ __makefile() {
     {
       printf "# Generated by configure version ${CONFIGURE_VERSION}.\n"
       printf "CONFIGURE_ARGS = ${@}\n"
-      printf "RESOURCES_DIR = "$(__get_key_value "RESOURCES_DIR" "$@")"\n"
       printf "WRKDIR = ${wrkdir}\n"
+      printf "RESOURCES_DIR = "$(__get_key_value "RESOURCES_DIR" "$@")"\n"
       printf "INSTALL_DIR = "$(__get_key_value "INSTALL_DIR" "$@")"\n"
       printf "MAN_PAGE_DIR = "$(__get_key_value "MAN_PAGE_DIR" "$@")"\n"
       printf "INSTALL = /usr/bin/install -c\n"
@@ -382,24 +372,24 @@ __makefile() {
       printf "test_directory: target\n"
       printf "\t@\$(INSTALL) -d -m 755 \$(WRKDIR)/test\n"
       printf "\n"
-      printf "copy_sources: install_directory\n"
-      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_sources\n"
-      printf "\t@echo copy_sources TARGETDIR=\$(WRKDIR)/install \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_sources\n"
-      printf "\t@sh \$(WRKDIR)/copy_sources\n"
+      printf "copy_sources_only: install_directory\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_sources_only\n"
+      printf "\t@echo copy_sources_only TARGETDIR=\$(WRKDIR)/install \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_sources_only\n"
+      printf "\t@sh \$(WRKDIR)/copy_sources_only\n"
       printf "\n"
-      printf "copy_tests: test_directory\n"
-      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_tests\n"
-      printf "\t@echo copy_tests TARGETDIR=\$(WRKDIR)/test \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_tests\n"
-      printf "\t@sh \$(WRKDIR)/copy_tests\n"
+      printf "copy_resources_for_test: test_directory\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_resources_for_test\n"
+      printf "\t@echo copy_resources_for_test TARGETDIR=\$(WRKDIR)/test \$(CONFIGURE_ARGS)>> \$(WRKDIR)/copy_resources_for_test\n"
+      printf "\t@sh \$(WRKDIR)/copy_resources_for_test\n"
       printf "\n"
-      printf "copy: copy_sources copy_tests\n"
+      printf "copy: copy_sources_only copy_resources_for_test\n"
       printf "\n"
-      printf "filter_sources: copy_sources\n"
+      printf "filter_sources: copy_sources_only\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/filter_sources\n"
       printf "\t@echo filter_sources WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS)>> \$(WRKDIR)/filter_sources\n"
       printf "\t@sh \$(WRKDIR)/filter_sources\n"
       printf "\n"
-      printf "filter_tests: copy_tests\n"
+      printf "filter_tests: copy_resources_for_test\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/filter_tests\n"
       printf "\t@echo filter_tests WRKDIR=\$(WRKDIR) \$(CONFIGURE_ARGS) >> \$(WRKDIR)/filter_tests\n"
       printf "\t@sh \$(WRKDIR)/filter_tests\n"
@@ -425,9 +415,9 @@ __makefile() {
       } | sort -R
       printf "\n"
       printf "doc:\n"
-      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/copy_man_pages\n"
-      printf "\t@echo copy_man_pages \$(CONFIGURE_ARGS) >> \$(WRKDIR)/copy_man_pages\n"
-      printf "\t@sh \$(WRKDIR)/copy_man_pages\n"
+      printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/install_man_pages\n"
+      printf "\t@echo install_man_pages \$(CONFIGURE_ARGS) >> \$(WRKDIR)/install_man_pages\n"
+      printf "\t@sh \$(WRKDIR)/install_man_pages\n"
       printf "\n"
       printf "install: filter_sources doc\n"
       printf "\t@sed -n "2,$(__extract_configure_line_number_minus_one)"p configure > \$(WRKDIR)/build_layout\n"
@@ -457,15 +447,15 @@ __parse_options() {
     do
         case "$_opt" in
                     h) __argp_parse_opts_help
-                       return ${E_EXIT}                                                       ;;
+                       return ${E_EXIT}                                                          ;;
                     v) __print_version
-                       return ${E_EXIT}                                                       ;;
-                    r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv          ;;
-                    I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                        ;;
-                  \@D) __accumulate_once "$_optarg" argv                                      ;;
-                    s) __accumulate_once "$_optarg" argv                                      ;;
-                    c) __accumulate_once "${_optarg%%=*}=${_optarg#*=}/.${_optarg%%=*}" argv  ;;
-                    m) __accumulate_once "MAN_PAGE_DIR=${_optarg}" argv                       ;;
+                       return ${E_EXIT}                                                          ;;
+                    r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv             ;;
+                    I) __accumulate_once "INSTALL_DIR=${_optarg}" argv                           ;;
+                  \@D) __accumulate_once "$_optarg" argv                                         ;;
+                    s) __accumulate_once "__${_optarg%%=*}__=${_optarg#*=}" argv                 ;;
+                    c) __accumulate_once "__${_optarg%%=*}__=${_optarg#*=}/.${_optarg%%=*}" argv ;;
+                    m) __accumulate_once "MAN_PAGE_DIR=${_optarg}" argv                          ;;
         esac
     done
     printf "%s" "$argv"
@@ -488,4 +478,4 @@ __configure () {
     fi
 }
 
-__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libdir=${HOME}/libs4shell --search-replace libtools=${HOME}/libs4shell/libtools --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --man-page-dir ${HOME}/.local/share/man
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libs4shell=${HOME}/libs4shell --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --man-page-dir ${HOME}/.local/share/man

@@ -17,11 +17,11 @@
 #@(#)
 #@(#) This is liblog4shell, a shell script library inspired by log4j.
 
-. "<__libtools__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libtools__>/lib4shell.sh"
+. "<__libs4shell__>/imports.sh" 2>/dev/null
+__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
 
 # Shell name
-__shell="$(__get_calling_shell_name "$0")"
+__shell="$(__get_shell_name "$0")"
 #
 # The standard output pattern layout is used to format each logger
 # entry. This parameter must be made of a subset of the following

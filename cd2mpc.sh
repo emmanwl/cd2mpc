@@ -24,14 +24,14 @@ E_SUCCESS=0
 E_FAILURE=1
 E_SIG_INT=128
 
-. "<__libtools__>/imports.sh" 2>/dev/null
-__import_resource_if_exists "<__cd2mpcrc__>"
-__import_resource_or_fail "<__libdir__>/liboptwrapper.sh"
-__import_resource_or_fail "<__libdir__>/liblog4shell.sh"
+. "<__libs4shell__>/imports.sh" 2>/dev/null
+__import_resource "<__cd2mpcrc__>"
+__import_resource_or_fail "<__libs4shell__>/liboptwrapper.sh"
+__import_resource_or_fail "<__libs4shell__>/liblog4shell.sh"
 stty -echo 2>/dev/null
 
 # Shell name
-__shell="$(__get_calling_shell_name "$0")"
+__shell="$(__get_shell_name "$0")"
 # Implementation for the type interface.
 is_string() { __is_of_match "$1" "[[:print:]]+"; }
 is_path() { __is_path "$1"; }

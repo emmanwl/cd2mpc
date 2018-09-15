@@ -23,11 +23,11 @@
 E_BAD_ARGS=65
 E_END_OF_PARSING=127
 
-. "<__libtools__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libtools__>/lib4shell.sh"
+. "<__libs4shell__>/imports.sh" 2>/dev/null
+__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
 
 # Shell name
-__shell="$(__get_calling_shell_name "$0")"
+__shell="$(__get_shell_name "$0")"
 # Parser name
 __parser=argp_parse
 #

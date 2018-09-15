@@ -19,8 +19,8 @@
 #@(#) provides the user with an extra indirection level for extending the default parsing behaviour.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
-. "<__libtools__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libdir__>/libopt4shell.sh"
+. "<__libs4shell__>/imports.sh" 2>/dev/null
+__import_resource_or_fail "<__libs4shell__>/libopt4shell.sh"
 
 # Mutators
 __look_for_parsing_extensions=true
