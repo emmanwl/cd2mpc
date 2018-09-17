@@ -196,8 +196,8 @@ __first_not_empty() {
     printf  "%s" "${1:-"${2:-""}"}"
 }
 # Brief
-# List functions declarations whose names match
-# <prefix> and/or <suffix> patterns.
+# List functions declarations whose name starts
+# with <prefix> and/or ends with <suffix>.
 __entry_points() {
     local file prefix suffix randomize=false entry_points entry
     while [ ${#} -gt 0 ]; do

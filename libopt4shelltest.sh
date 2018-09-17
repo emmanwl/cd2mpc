@@ -15,10 +15,10 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libopt4test, a test suite for the libopt4shell API.
+#@(#) This is libopt4shelltest, a test suite for the libopt4shell API.
 
 . "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
+__import_resource_or_fail "<__libs4shell__>/libtest4shell.sh"
 __import_resource_or_fail "<__libs4shell__>/libopt4shell.sh"
 __import_resource_or_fail "<__libs4shell__>/liblog4shell.sh" --file-appender=/dev/null
 
@@ -75,7 +75,6 @@ __err_missing_type_check_function_set() {
     printf "%s" "$options"
 }
 #
-#
 __err_duplicate_option_entry_set() {
     local options="m,u::0:
                    m:max@:1@integer:
@@ -106,32 +105,19 @@ __options_set() {
                    h:help:0:"
     printf "%s" "$options"
 }
-# Brief
-# Convenient functions for emulating multiple consecutive calls.
-___run_argp_parse_a_certain_number_of_times() {
-    local arg run_once=false r=0
-    for arg; do
-       case "$arg" in /run-once) run_once=true; break ;; esac
-    done
-    while :; do
-        __argp_parse "$@"
-        r=${?}
-        if [ ${r} -ne 0 -o "$run_once" = "true" ]; then
-           break
-        fi
-    done
-    return ${r}
-}
 #
 __run_argp_parse() {
-    ___run_argp_parse_a_certain_number_of_times /long-only \
-                                                /run-once \
-                                                /callback-option-prefix=_test "$@" 2>&1
+    __call_function_a_certain_number_of_times /long-only \
+	                                      /function="__argp_parse" \
+                                              /run-once \
+                                              /callback-option-prefix=_test "$@" 2>&1
 }
 __run_argp_parse_repeatedly() {
-    ___run_argp_parse_a_certain_number_of_times /long-only \
-                                                /callback-option-prefix=_test "$@" 2>&1
+    __call_function_a_certain_number_of_times /long-only \
+                                              /function="__argp_parse" \
+                                              /callback-option-prefix=_test "$@" 2>&1
 }
+# Brief
 # Test launcher
 __should_report_the_following() {
     local test_name="should_report_${1}" test_data="$2" error_message="$3"
@@ -671,17 +657,5 @@ __should_parse_multiple_key_value_option_arguments_test() {
           return 1;;
     esac
 }
-# Brief
-# Run randomly all test functions defined here: functions whose
-# name start with "__should_" and end with "_test".
-__run_test_suite_randomly() {
-    local test has_failed=false
-    for test in $(__entry_points --prefix=__should_ --suffix=_test --randomly --file="libopt4test.sh"); do
-        if ! eval ${test}; then
-           has_failed=true
-        fi
-    done
-    ${has_failed} && return 1 || return 0
-}
 
-__run_test_suite_randomly
+__run_test_suite_randomly "<__libs4shell__>/$(basename "$0")"

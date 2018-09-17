@@ -313,7 +313,7 @@ build_layout() {
       done
       for resource in $(__get_key_value "INSTALL" "$@"); do
          echo -c -m 755 -d "$install_dir"
-         echo -c -m 755 "${wrkdir}/install/${resource}" "${install_dir}/${resource}"
+         echo -c -m 755 "${wrkdir}/install/${resource}" "${install_dir}/${resource%\.sh}"
       done
       #
       grep -whoE "$(__configuration_file_search_pattern "$@")" $(__list_files_accordingly --exclude-tests "$@") 2>/dev/null | __render_paths "$@" | while read resource
@@ -341,7 +341,7 @@ install_man_pages() {
        for shell in ${shells}; do
            if [ -s "${shell}.manpage.gz" ]; then
               echo -c -m 755 -d "${man_page_dir}/man1"
-              echo -c -m 644 "${shell}.manpage.gz" "${man_page_dir}/man1/${shell}.1.gz"
+              echo -c -m 644 "${shell}.manpage.gz" "${man_page_dir}/man1/${shell%\.sh}.1.gz"
            fi
        done | awk '!commands[$0]++' | xargs -t -n5 install
     fi
@@ -478,4 +478,4 @@ __configure () {
     fi
 }
 
-__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libs4shell=${HOME}/libs4shell --define TEST=libopt4test.sh --define INSTALL=cd2mpc.sh --man-page-dir ${HOME}/.local/share/man
+__configure "$@" --resources-dir=. --install-dir ${HOME}/bin --dot-file cd2mpcrc=${HOME} --search-replace libs4shell=${HOME}/libs4shell --define TEST=libopt4shelltest.sh --define INSTALL=cd2mpc.sh --man-page-dir ${HOME}/.local/share/man
