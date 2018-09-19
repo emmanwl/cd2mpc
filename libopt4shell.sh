@@ -1,6 +1,6 @@
 #@IgnoreInspection BashAddShebang
-#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
-#@(#) All rights reserved.
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
 #@(#)
 #@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
 #@(#) provided these redistributions must retain the above copyright, this condition and the following
@@ -20,11 +20,8 @@
 #@(#) negatable and incremental style of options as well as (option) argument type checking.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
-E_BAD_ARGS=65
-E_END_OF_PARSING=127
-
-. "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
+. "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
+__import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -205,13 +202,13 @@ __err_required_option_not_invoked="required option \`%s' was not invoked"
 __err_invalid_option_argument_type="option \`%s' expects type \`%s' for argument \`%s'"
 __err_invalid_parsing_stragegy="invalid parsing strategy \`%s'"
 __err_missing_option_switch="missing required switch /options=<...>, see argp_parse_help for help"
-__err_invalid_callback_option_prefix="invalid /callback-option-prefix argument, expecting a non-empty string"
-__err_invalid_argument_separator="invalid /argument-separator symbol, expecting a single non-empty character"
+__err_invalid_callback_option_prefix="invalid /callback-option-prefix argument, expecting a non-empty value"
+__err_invalid_argument_separator="invalid /argument-separator symbol, expecting a single character symbol"
 __err_required_and_exclusive_option_definition="options \`%s,%s' can't be required and mutually exclusive as well"
 #
 # Brief
 # Print message to stdout/stderr.
-___trace() {
+trace() {
     local format
     if [ ${#} -ge 1 ]; then
        format="${__shell}: ${1}\n"
@@ -219,24 +216,24 @@ ___trace() {
        printf "$format" "$@"
     fi
 }
-__sysout() {
-    ___trace "$@"
+sysout() {
+    trace "$@"
 }
-__syserr() {
-    ___trace "$@" >&2
+syserr() {
+    trace "$@" >&2
 }
 # Brief
 # Check whether ($@) hold each item only once.
-__has_unique_candidates() {
+has_unique_candidates() {
     local token1 token2
     set -- $(__split_tokens_accordingly " " "$@")
     for token1; do
-        token1="$(__lowerize_accordingly "$token1")"
+        token1="$(lowerize_accordingly "$token1")"
         shift
         for token2; do
-            token2="$(__lowerize_accordingly "$token2")"
+            token2="$(lowerize_accordingly "$token2")"
             if [ "$token1" = "$token2" ]; then
-               __syserr "$__err_not_unique_long_alias" "$token1"
+               syserr "$__err_not_unique_long_alias" "$token1"
                return 1
             fi
         done
@@ -244,12 +241,12 @@ __has_unique_candidates() {
 }
 # Brief
 # Read all columns from a colon-delimited string.
-__read_colon_separated_token() {
+read_colon_separated_token() {
     __read_separator_delimited_token ":" "$@"
 }
 # Brief
 # Strip input string from the ending symbol '@' or '!'.
-__strip_ending_option_symbol() {
+strip_ending_option_symbol() {
     local string="$1"
     case "${string#"${string%?}"}" in
          \!|\@) string="${string%?}" ;;
@@ -258,7 +255,7 @@ __strip_ending_option_symbol() {
 }
 # Brief
 # Strip input string from the starting symbol '@' or '!'.
-__strip_starting_option_symbol() {
+strip_starting_option_symbol() {
     local string="$1"
     case "${string%"${string#?}"}" in
          \!|\@) string="${string#?}" ;;
@@ -268,7 +265,7 @@ __strip_starting_option_symbol() {
 # Brief
 # Check whether is_${1} denotes an existing implementation
 # for the type interface.
-__is_implemented() {
+is_implemented() {
    local arg_type="$1"
    if [ ! "${arg_type##key-value-*}" ]; then
       if ! type is_"$(__underscorize "${arg_type#key-value-}")"; then
@@ -280,7 +277,7 @@ __is_implemented() {
 }
 # Brief
 # Parse ${_main_opts} and build {__optstring}.
-__get_optstring() {
+get_optstring() {
     local token long_tokens optstring short_tokens arg_type opt_code aliases arg_flag IFS="
 "
     local mainopts="${_main_opts}
@@ -289,11 +286,11 @@ __end_main_opts"
     for token in ${mainopts}; do
         token="$(__trim "$token")"
         if [ "$token" = "__end_main_opts" ]; then
-           if ! __has_unique_candidates "$long_tokens"; then
+           if ! has_unique_candidates "$long_tokens"; then
               return 1
            elif [ "$optstring" ]; then
               if ! __is_of_match "$optstring" "$__shrt_rgxp"; then
-                 __syserr "$__err_short_option_syntax" "$optstring"
+                 syserr "$__err_short_option_syntax" "$optstring"
                  return 1
               else
                  printf "%s" "$optstring"
@@ -301,15 +298,15 @@ __end_main_opts"
            fi
            return 0
         elif ! __is_of_match "$token" "$__long_rgxp"; then
-           __syserr "$__err_long_option_syntax" "$token"
+           syserr "$__err_long_option_syntax" "$token"
            return 1
         fi
         #
-        __read_colon_separated_token "$token" 1 opt_code aliases arg_flag
+        read_colon_separated_token "$token" 1 opt_code aliases arg_flag
         if [ ! "$short_tokens" ]; then
            short_tokens="$opt_code"
         elif [ ! "${short_tokens##*"${opt_code}"*}" ]; then
-           __syserr "$__err_duplicate_option_entry" "$opt_code"
+           syserr "$__err_duplicate_option_entry" "$opt_code"
            return 1
         else
            short_tokens="${short_tokens} ${opt_code}"
@@ -323,23 +320,23 @@ __end_main_opts"
         fi
         #
         if [ ! "$aliases" -a ${#opt_code} -gt 1 ]; then
-           __syserr "$__err_missing_long_alias" "$opt_code"
+           syserr "$__err_missing_long_alias" "$opt_code"
            return 1
         elif [ "$aliases" -a ! "${aliases%%*!}" ]; then
            if [ ${arg_flag%%@*} -ne 0 ]; then
-              __syserr "$__err_negatable_option_definition" "$(__get_readable_option_name "$opt_code")"
+              syserr "$__err_negatable_option_definition" "$(get_readable_option_name "$opt_code")"
               return 1
            fi
         elif [ "$aliases" -a ! "${aliases%%*@}" ]; then
            if [ ${arg_flag%%@*} -ne 1 ]; then
-              __syserr "$__err_incremental_option_definition" "$(__get_readable_option_name "$opt_code")"
+              syserr "$__err_incremental_option_definition" "$(get_readable_option_name "$opt_code")"
               return 1
            fi
         fi
         if [ "$aliases" ]; then
            long_tokens="$(local args="$long_tokens" alternate IFS="|"
                           for alternate in ${aliases}; do
-                              alternate="$(__strip_ending_option_symbol "$alternate")"
+                              alternate="$(strip_ending_option_symbol "$alternate")"
                               if [ ! "$args" ]; then
                                  args="$alternate"
                               else
@@ -353,34 +350,34 @@ __end_main_opts"
                               [1-2]) arg_type="string" ;;
                                   *) arg_type= ;;
         esac
-        if [ "$arg_type" ] && ! __is_implemented "$arg_type"; then
-           __syserr "$__err_missing_type_check_function" "$(__underscorize "$arg_type")"
+        if [ "$arg_type" ] && ! is_implemented "$arg_type"; then
+           syserr "$__err_missing_type_check_function" "$(__underscorize "$arg_type")"
            return 1
         fi
     done
 }
 #
-__set_option_and_argument() {
+set_option_and_argument() {
     __opt="$1"
     __optarg="$2"
 }
 #
-__set_callback_option_and_argument() {
+set_callback_option_and_argument() {
     read -r -- ${_callback_opt} ${_callback_opt}arg<<EOF
 ${1} ${2}
 EOF
-    __set_option_and_argument "" ""
+    set_option_and_argument "" ""
 }
 #
-__set_erroneous_option_and_argument() {
+set_erroneous_option_and_argument() {
     local optarg
-    __decode optarg "$_exit_on_error" "" "$2"
-    __set_option_and_argument "$1" "$optarg"
+    decode optarg "$_exit_on_error" "" "$2"
+    set_option_and_argument "$1" "$optarg"
 }
 #
-__alert_whenever() {
+alert_whenever() {
     if ${_exit_on_error}; then
-       __syserr "$@"
+       syserr "$@"
     fi
 }
 #
@@ -392,7 +389,7 @@ is_key_value() {
 # - if ${2} is like key-value-${type}, check that ${1}
 #   is of type key-value and that ${1#*=} is of type ${type}.
 # - else check that ${1} is of type ${2}
-__has_argument_proper_type() {
+has_argument_proper_type() {
   local argument="$1" type="$2"
   if [ ! "${type##key-value-*}" ]; then
      if ! { is_key_value "$argument" && eval is_"$(__underscorize "${type#key-value-}")" "${argument#*=}"; }; then
@@ -404,31 +401,31 @@ __has_argument_proper_type() {
 }
 # Brief
 # Check whether the option argument is of the given type.
-__has_option_argument_proper_type_internal() {
+has_option_argument_proper_type_internal() {
   local argument="$1" type="$2" option="$3"
-  if [ "$type" ] && ! __has_argument_proper_type "$argument" "$type"; then
-     __alert_whenever "$__err_invalid_option_argument_type" "$option" "$type" "$argument"
+  if [ "$type" ] && ! has_argument_proper_type "$argument" "$type"; then
+     alert_whenever "$__err_invalid_option_argument_type" "$option" "$type" "$argument"
      return 1
   fi
 }
 # Brief
 # Check that the option argument(s) is of the proper type.
-__has_option_argument_proper_type() {
-  __has_option_argument_proper_type_internal "${__optarg:="$1"}" "$(eval echo '$'__"${__opt}"_argument_type)" "$2"
+has_option_argument_proper_type() {
+  has_option_argument_proper_type_internal "${__optarg:="$1"}" "$(eval echo '$'__"${__opt}"_argument_type)" "$2"
 }
 # Brief
 # Simple if-then-else read routine: if ${1} is evaluated to true,
 # return 0 else return 1.
-___decode() {
+_decode() {
     case "$1" in [tT][rR][uU][eE]|0) return 0 ;; *) return 1 ;; esac
 }
 # Brief
 # Simple if-then-else read routine: if ${2} is evaluated to true,
 # the variable whose name is ${1} is set to ${3}, otherwise it will
 # be set to ${4}.
-__decode() {
+decode() {
     local arg r
-    ___decode "$2" && { r=0; arg="$3"; } || { r=1; arg="$4"; }
+    _decode "$2" && { r=0; arg="$3"; } || { r=1; arg="$4"; }
     read -r -- $1<<EOF
 ${arg}
 EOF
@@ -436,59 +433,59 @@ EOF
 }
 # Brief
 # Routine for parsing short options.
-__argp_parse_short() {
+argp_parse_short() {
     local parse_as_long="$1" opt_code="${__optwrd%"${__optwrd#?}"}" opt_context
     shift
-    __decode opt_context "$parse_as_long" "${1%%=*}" "-${opt_code}"
+    decode opt_context "$parse_as_long" "${1%%=*}" "-${opt_code}"
     if [ ! "$__optstring" ]; then
-       __set_erroneous_option_and_argument "$__err_code_illegal_opt" "$opt_context"
-       __alert_whenever "$__err_unrecognized_option" "$opt_context"
+       set_erroneous_option_and_argument "$__err_code_illegal_opt" "$opt_context"
+       alert_whenever "$__err_unrecognized_option" "$opt_context"
        return 0
     elif [ ! "${__optstring%%*"${opt_code}"::*}" ]; then
-       __has_conflicting_state "${__opt:="${opt_code}"}" && return 0
-       if ! __has_option_argument_proper_type "${__optwrd#?}" "$opt_context"; then
-          __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
+       has_conflicting_state "${__opt:="${opt_code}"}" && return 0
+       if ! has_option_argument_proper_type "${__optwrd#?}" "$opt_context"; then
+          set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
           return 0
        fi
        __optwrd=
        return 1
     elif [ ! "${__optstring%%*"${opt_code}":*}" ]; then
-       __has_conflicting_state "${__opt:="${opt_code}"}" && return 0
+       has_conflicting_state "${__opt:="${opt_code}"}" && return 0
        if [ ! "${__optwrd#?}" ]; then
           if [ ${#} -eq 1 ]; then
-             __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
-             __alert_whenever "$__err_required_option_argument" "$opt_context"
+             set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
+             alert_whenever "$__err_required_option_argument" "$opt_context"
              return 0
-          elif ! __has_option_argument_proper_type "$2" "$opt_context"; then
-             __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
+          elif ! has_option_argument_proper_type "$2" "$opt_context"; then
+             set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
              return 0
           fi
           __optwrd=
-          __accumulate_mandatory_option_and_arguments_if_necessary
+          accumulate_mandatory_option_and_arguments_if_necessary
           return 2
-       elif ! __has_option_argument_proper_type "${__optwrd#?}" "$opt_context"; then
-          __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
+       elif ! has_option_argument_proper_type "${__optwrd#?}" "$opt_context"; then
+          set_erroneous_option_and_argument "$__err_code_illegal_arg" "$opt_context"
           return 0
        fi
        __optwrd=
-       __accumulate_mandatory_option_and_arguments_if_necessary
+       accumulate_mandatory_option_and_arguments_if_necessary
        return 1
     elif [ ! "${__optstring%%*"${opt_code}"*}" ]; then
-       __has_conflicting_state "${__opt:="${opt_code}"}" && return 0
+       has_conflicting_state "${__opt:="${opt_code}"}" && return 0
        __optwrd="${__optwrd#?}"
        if [ "$__optwrd" ]; then
           return 0
        fi
        return 1
     else
-       __set_erroneous_option_and_argument "$__err_code_illegal_opt" "$opt_context"
-       __syserr "$__err_unrecognized_option" "$opt_context"
+       set_erroneous_option_and_argument "$__err_code_illegal_opt" "$opt_context"
+       syserr "$__err_unrecognized_option" "$opt_context"
     fi
     return 0
 }
 # Brief
 # According to ${_case_sensitive}, put ${1} to lowercase.
-__lowerize_accordingly() {
+lowerize_accordingly() {
     local string="$1"
     if ! ${_case_sensitive}; then
        string=$(__lowerize "$string")
@@ -501,9 +498,9 @@ __lowerize_accordingly() {
 # Return:
 # - the argument mandatoriness flag of the matched option
 # - 5 in any other case.
-__match_long_option_name() {
-    local opt_name="$(__lowerize_accordingly "$(__strip_ending_option_symbol "$1")")"
-    local opt_to_match="$(__lowerize_accordingly "$2")"
+match_long_option_name() {
+    local opt_name="$(lowerize_accordingly "$(strip_ending_option_symbol "$1")")"
+    local opt_to_match="$(lowerize_accordingly "$2")"
     local opt_code="$3" arg_flag="$4" _opt
     for _opt in "${opt_name}" "no-${opt_name}" "no${opt_name}"; do
         if [ ! "${_opt##"${opt_to_match}"*}" ]; then
@@ -524,7 +521,7 @@ __match_long_option_name() {
 # - 3 if ${1}, specified as long, matches several options
 # - 4 if ${1}, specified as long, doesn't match any option
 # - 5 in any other case.
-__get_long_option_code() {
+get_long_option_code() {
     local opt_to_match="$1" has_double_dash=false token matches=0 opt_code arg_flag
     local aliases result result_flag matched_code matched_flag matched_opt IFS="
 "
@@ -539,20 +536,20 @@ __end_main_opts"
         if [ "$token" = "__end_main_opts" ]; then
            if [ ${matches} -eq 0 ]; then
               opt_code="$__err_code_illegal_opt"
-              __decode arg_flag "$has_double_dash" 4 5
+              decode arg_flag "$has_double_dash" 4 5
            elif [ ${matches} -eq 1 ]; then
               opt_code="$matched_code"
               arg_flag="$matched_flag"
            else
               opt_code="$__err_code_illegal_opt"
-              __decode arg_flag "$has_double_dash" 3 5
+              decode arg_flag "$has_double_dash" 3 5
            fi
         else
-           __read_colon_separated_token "$token" 1 opt_code aliases arg_flag
+           read_colon_separated_token "$token" 1 opt_code aliases arg_flag
            if [ "$aliases" ]; then
               result="$(local alternate r IFS="|"
                        for alternate in ${aliases}; do
-                           __match_long_option_name "$alternate" "$opt_to_match" "$opt_code" "${arg_flag%@*}"
+                           match_long_option_name "$alternate" "$opt_to_match" "$opt_code" "${arg_flag%@*}"
                            r="$?"
                            if [ ${r} -ne 5 ]; then
                               return ${r}
@@ -562,7 +559,7 @@ __end_main_opts"
               result_flag="$?"
               if [ "$result" ]; then
                  matches=$((${matches} + 1))
-                 __read_colon_separated_token "$result" 1 matched_code matched_opt
+                 read_colon_separated_token "$result" 1 matched_code matched_opt
                  matched_flag="$result_flag"
                  if [ ${#opt_to_match} -eq ${#matched_opt} ]; then
                     opt_code="$matched_code"; arg_flag="$matched_flag"
@@ -578,36 +575,36 @@ __end_main_opts"
 }
 # Brief
 # Check whether ${1} must be parsed as a long option.
-__argp_pre_parse() {
+argp_pre_parse() {
     local _parse_as_long="$1" warg
     shift
     if [ ! "$__optwrd" ]; then
        case "$1" in
           -) return 1 ;;
          --) return $((${E_END_OF_PARSING} + 1)) ;;
-        --*) __read_colon_separated_token true 1 ${_parse_as_long} ;;
+        --*) read_colon_separated_token true 1 ${_parse_as_long} ;;
          -*) case "${1#-}" in
                W*) if ${_allow_posix_long_opt}; then
                       if [ ! "${1#-W}" ]; then
                          if [ ${#} -ge 2 -a "${2##-*}" -a ! "${2##*=*}" ]
                          then
                             warg="$2"; shift 2
-                            __argp_parse_long "--${warg}" "$@"
+                            argp_parse_long "--${warg}" "$@"
                             return 2
                          fi
                       elif [ "${1##-W-*}" -a ! "${1##*=*}" ]
                       then
                          warg="${1#-W}"; shift
-                         __argp_parse_long "--${warg}" "$@"
+                         argp_parse_long "--${warg}" "$@"
                          return 1
                       fi
                    fi ;;
              esac
              __optwrd="${1#-}"
-             __read_colon_separated_token ${_long_only} 1 ${_parse_as_long} ;;
+             read_colon_separated_token ${_long_only} 1 ${_parse_as_long} ;;
           *) case "$_parsing_strategy" in
                    REQUIRE_ORDER) return ${E_END_OF_PARSING} ;;
-                 RETURN_IN_ORDER) __set_option_and_argument "1" "$1"
+                 RETURN_IN_ORDER) set_option_and_argument "1" "$1"
                                   return 1 ;;
                          PERMUTE) if [ "$__nonopt_argv" ]; then
                                      __nonopt_argv="${__nonopt_argv} ${1}"
@@ -618,62 +615,62 @@ __argp_pre_parse() {
              esac ;;
        esac
     else
-       __read_colon_separated_token false 1 ${_parse_as_long}
+       read_colon_separated_token false 1 ${_parse_as_long}
     fi
 }
 # Brief
 # Routine for parsing long options.
-__argp_parse_long() {
+argp_parse_long() {
    local opt_code
-   opt_code="$(__get_long_option_code "${1%%=*}")"
+   opt_code="$(get_long_option_code "${1%%=*}")"
    case "$?" in
      0) __opt="$opt_code"
-        __has_conflicting_state "$(__strip_starting_option_symbol "$opt_code")" && return 0
+        has_conflicting_state "$(strip_starting_option_symbol "$opt_code")" && return 0
         if [ ! "${1##*=*}" ]; then
-           __set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
-           __alert_whenever "$__err_not_allowed_option_argument" "${1%%=*}"
+           set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
+           alert_whenever "$__err_not_allowed_option_argument" "${1%%=*}"
            return 0
         fi
         __optwrd=
         return 1 ;;
      1) __opt="$opt_code"
-        __has_conflicting_state "$(__strip_starting_option_symbol "$opt_code")" && return 0
+        has_conflicting_state "$(strip_starting_option_symbol "$opt_code")" && return 0
         if [ ! "${1##*=*}" ]; then
-           if ! __has_option_argument_proper_type "${1#*=}" "${1%%=*}"; then
-              __set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
+           if ! has_option_argument_proper_type "${1#*=}" "${1%%=*}"; then
+              set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
               return 0
            fi
            __optwrd=
-           __accumulate_mandatory_option_and_arguments_if_necessary
+           accumulate_mandatory_option_and_arguments_if_necessary
            return 1
         elif [ ${#} -gt 1 ]; then
-           if ! __has_option_argument_proper_type "$2" "$1"; then
-              __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$1"
+           if ! has_option_argument_proper_type "$2" "$1"; then
+              set_erroneous_option_and_argument "$__err_code_illegal_arg" "$1"
               return 0
            fi
            __optwrd=
-           __accumulate_mandatory_option_and_arguments_if_necessary
+           accumulate_mandatory_option_and_arguments_if_necessary
            return 2
         else
-           __set_erroneous_option_and_argument "$__err_code_illegal_arg" "$1"
-           __alert_whenever "$__err_required_option_argument" "$1"
+           set_erroneous_option_and_argument "$__err_code_illegal_arg" "$1"
+           alert_whenever "$__err_required_option_argument" "$1"
            return 0
         fi ;;
      2) __opt="$opt_code"
-        __has_conflicting_state "$(__strip_starting_option_symbol "$opt_code")" && return 0
+        has_conflicting_state "$(strip_starting_option_symbol "$opt_code")" && return 0
         if [ ! "${1##*=*}" ]; then
-           if ! __has_option_argument_proper_type "${1#*=}" "${1%%=*}"; then
-              __set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
+           if ! has_option_argument_proper_type "${1#*=}" "${1%%=*}"; then
+              set_erroneous_option_and_argument "$__err_code_illegal_arg" "${1%%=*}"
               return 0
            fi
         fi
         __optwrd=
         return 1 ;;
-     3) __set_erroneous_option_and_argument "$opt_code" "${1%%=*}"
-        __alert_whenever "$__err_ambiguous_option" "${1%%=*}"
+     3) set_erroneous_option_and_argument "$opt_code" "${1%%=*}"
+        alert_whenever "$__err_ambiguous_option" "${1%%=*}"
         return 0 ;;
-     4) __set_erroneous_option_and_argument "$opt_code" "${1%%=*}"
-        __alert_whenever "$__err_unrecognized_option" "${1%%=*}"
+     4) set_erroneous_option_and_argument "$opt_code" "${1%%=*}"
+        alert_whenever "$__err_unrecognized_option" "${1%%=*}"
         return 0 ;;
    esac
    return 5
@@ -682,23 +679,23 @@ __argp_parse_long() {
 # Routine for parsing long/short options. The current behaviour is to
 # fallback to the short options parsing routine if no error is raised
 # during the initial long pass.
-__argp_parse_internal() {
+argp_parse_internal() {
     local parse_as_long r
-    __argp_pre_parse parse_as_long "$@" || return
+    argp_pre_parse parse_as_long "$@" || return
     #
     if ${parse_as_long}; then
-       __argp_parse_long "$@"
+       argp_parse_long "$@"
        r="$?"
        if [ ${r} -lt 5 ]; then
           return ${r}
        fi
     fi
     #
-    __argp_parse_short "$parse_as_long" "$@"
+    argp_parse_short "$parse_as_long" "$@"
 }
 # Brief
 # Read parser configuration once.
-__read_parser_configuration_arguments() {
+read_parser_configuration_arguments() {
     local cmd="s/^[[:space:]]\{0,\}//g" noptindex=0
     while [ ${#} -gt 0 -a ! "${1##/*}" ]; do
         case "${1#/}" in
@@ -717,7 +714,7 @@ __read_parser_configuration_arguments() {
         noptindex=$((${noptindex} + 1))
         shift
     done
-    if ___decode "$POSIXLY_CORRECT"; then
+    if _decode "$POSIXLY_CORRECT"; then
        _allow_posix_long_opt=true
        _parsing_strategy="REQUIRE_ORDER"
     fi
@@ -726,7 +723,7 @@ __read_parser_configuration_arguments() {
 # Brief
 # Get the option code matching ${1} if ${1} matches a short option.
 # Return the matched option argument flag, 3 otherwise.
-__get_short_option_code() {
+get_short_option_code() {
     local opt="$1"
     if [ ! "$__optstring" ]; then
        return 3
@@ -745,13 +742,13 @@ __get_short_option_code() {
 }
 # Brief
 # Map silently all required options to their option code.
-__map_required_options() {
+map_required_options() {
     local opt opt_code req_opts
     for opt in $(__split_tokens_accordingly "," "$_req_opts"); do
         if [ ${#opt} -eq 1 ]; then
-           opt_code="$(__get_short_option_code "$opt")"
+           opt_code="$(get_short_option_code "$opt")"
         else
-           opt_code="$(__get_long_option_code "$opt")"
+           opt_code="$(get_long_option_code "$opt")"
         fi
         case "$?" in
              1) req_opts="$(__append "$opt_code" "$req_opts" ",")" ;;
@@ -760,15 +757,15 @@ __map_required_options() {
 }
 # Brief
 # Map silently all exclusive options to their option code.
-__map_exclusive_options() {
+map_exclusive_options() {
     local opt_grp exclopts opt opt_code excl_opts IFS opta optb
     for opt_grp in $(__split_tokens_accordingly "@" "$_excl_opts"); do
         exclopts=
         for opt in $(__split_tokens_accordingly "," "$opt_grp"); do
             if [ ${#opt} -eq 1 ]; then
-               opt_code="$(__get_short_option_code "$opt")"
+               opt_code="$(get_short_option_code "$opt")"
             else
-               opt_code="$(__get_long_option_code "$opt")"
+               opt_code="$(get_long_option_code "$opt")"
             fi
             case "$?" in
                [0-2]) exclopts="$(__append "$opt_code" "$exclopts" ",")" ;;
@@ -785,7 +782,7 @@ __map_exclusive_options() {
             shift
             for optb; do
                 if [ "$opta" != "$optb" ]; then
-                   __map_exclusive_options_pair "$opta" "$optb"
+                   map_exclusive_options_pair "$opta" "$optb"
                 fi
             done
         done
@@ -793,7 +790,7 @@ __map_exclusive_options() {
 }
 # Brief
 # Check whether required options are not exclusive of one another.
-__map_required_versus_exclusive_options() {
+map_required_versus_exclusive_options() {
     local opta optb conflicts conflict
     set -- $(__split_tokens_accordingly "," "$_req_opts")
     for opta; do
@@ -803,7 +800,7 @@ __map_required_versus_exclusive_options() {
            for optb; do
                for conflict in $(__split_tokens_accordingly "," "$conflicts"); do
                    if [ "$conflict" = "$optb" ]; then
-                      __syserr "$__err_required_and_exclusive_option_definition" "$(__get_readable_option_name "$opta")" "$(__get_readable_option_name "$optb")"
+                      syserr "$__err_required_and_exclusive_option_definition" "$(get_readable_option_name "$opta")" "$(get_readable_option_name "$optb")"
                       return 1
                    fi
                done
@@ -812,45 +809,45 @@ __map_required_versus_exclusive_options() {
     done
 }
 #
-__configure_parser() {
+configure_parser() {
     if ! __is_of_match "$_parsing_strategy" "$__parsing_strategy_rgxp"; then
-       __syserr "$__err_invalid_parsing_stragegy" "$_parsing_strategy"
+       syserr "$__err_invalid_parsing_stragegy" "$_parsing_strategy"
        return 1
     elif [ ! "$_main_opts" ]; then
-       __syserr "$__err_missing_option_switch"
+       syserr "$__err_missing_option_switch"
        return 1
-    elif ! __optstring="$(__get_optstring)"; then
+    elif ! __optstring="$(get_optstring)"; then
        return 1
     elif [ ! "$_callback_opt" ]; then
-       __syserr "$__err_invalid_callback_option_prefix"
+       syserr "$__err_invalid_callback_option_prefix"
        return 1
-    elif [ "$_req_opts" ] && ! __map_required_options; then
+    elif [ "$_req_opts" ] && ! map_required_options; then
        return 1
-    elif [ "$_excl_opts" ] && ! __map_exclusive_options; then
+    elif [ "$_excl_opts" ] && ! map_exclusive_options; then
        return 1
-    elif [ "$_excl_opts" -a "$_req_opts" ] && ! __map_required_versus_exclusive_options
+    elif [ "$_excl_opts" -a "$_req_opts" ] && ! map_required_versus_exclusive_options
     then
        return 1
     elif [ ${#_arg_sep} -gt 1 ]; then
-       __syserr "$__err_invalid_argument_separator"
+       syserr "$__err_invalid_argument_separator"
        return 1
     elif [ ${#_key_value_sep} -gt 1 ]; then
-       __syserr "$__err_invalid_argument_separator"
+       syserr "$__err_invalid_argument_separator"
        return 1
     fi
-    __decode __err_code_illegal_arg "$_exit_on_error" "?" ":"
-    __decode __err_code_expected_opt "$_exit_on_error" "?" ","
-    __decode __err_code_conflict_opt "$_exit_on_error" "?" "^"
+    decode __err_code_illegal_arg "$_exit_on_error" "?" ":"
+    decode __err_code_expected_opt "$_exit_on_error" "?" ","
+    decode __err_code_conflict_opt "$_exit_on_error" "?" "^"
     return 0
 }
 # Brief
 # Routine for initializing option mutators.
-__init_option_mutators() {
+init_option_mutators() {
     local token opt_code aliases arg_flag arg_type IFS="
 "
     for token in ${_main_opts}; do
         token="$(__trim "$token")"
-        __read_colon_separated_token "$token" 1 opt_code aliases arg_flag
+        read_colon_separated_token "$token" 1 opt_code aliases arg_flag
         case "$arg_flag" in [1-2]@*) arg_type="${arg_flag#?@}" ;;
                               [1-2]) arg_type="string" ;;
                                   *) arg_type= ;;
@@ -868,7 +865,7 @@ __init_option_mutators() {
 # Brief
 # Strip entry ${1} from a ${3}-delimited string, namely ${2}, and assign the
 # result to the placeholder ${4}.
-__remove_entry_from_string_with_separator() {
+remove_entry_from_string_with_separator() {
     local entry="$1" options="$2" separator="$3" result="$4"
     local opt_code _options has_entry=false
     if [ "$options" ]; then
@@ -894,15 +891,15 @@ EOF
 # Brief
 # Remove ${1} from the required options set if ${1} does match such
 # an option.
-__remove_entry_from_required_options_if_necessary() {
-    __remove_entry_from_string_with_separator "$1" "$_req_opts" "," _req_opts
+remove_entry_from_required_options_if_necessary() {
+    remove_entry_from_string_with_separator "$1" "$_req_opts" "," _req_opts
     return 0
 }
 # Brief
 # Remove ${1} from the accumulated options if ${1} does match such
 # an option.
-__remove_entry_from_accumulated_options_if_necessary() {
-    __remove_entry_from_string_with_separator "$1" "$__acc_opts" ":" __acc_opts
+remove_entry_from_accumulated_options_if_necessary() {
+    remove_entry_from_string_with_separator "$1" "$__acc_opts" ":" __acc_opts
     if [ ${?} -eq 1 ]; then
        eval "__has_${opt_code}_accumulator=false" "__${opt_code}_arguments="
     fi
@@ -910,14 +907,14 @@ __remove_entry_from_accumulated_options_if_necessary() {
 # Brief
 # Remove the first entry of the required options and, if necessary,
 # from the accumulated options as well.
-__remove_current_entry_from_required_and_accumulated_options() {
-    __remove_entry_from_required_options_if_necessary "$1"
-    __remove_entry_from_accumulated_options_if_necessary "$1"
+remove_current_entry_from_required_and_accumulated_options() {
+    remove_entry_from_required_options_if_necessary "$1"
+    remove_entry_from_accumulated_options_if_necessary "$1"
 }
 # Brief
 # Check whether ${1} must be added to vector ${2} (${3} denoting the 
 # element separator).
-__must_1_be_added_to_2_using_3_as_separator() {
+must_1_be_added_to_2_using_3_as_separator() {
     if ! ${_filter_option_arguments_to_uniqueness}; then
        return 0
     elif  ! __is_1_contained_in_2_using_3_as_separator "$1" "$2" "$3"; then
@@ -928,7 +925,7 @@ __must_1_be_added_to_2_using_3_as_separator() {
 # Brief
 # Compute the accumulated argument vector __${1}_arguments depending
 # on _${1}_argument_type.
-__get_accumulated_argument_vector() {
+get_accumulated_argument_vector() {
     local opt="$1" optarg="$2" optargs="$(eval echo '$'__"${1}"_arguments)"
     local key_value _optargs matched=false
     if [ ! "$optargs" ]; then
@@ -940,7 +937,7 @@ __get_accumulated_argument_vector() {
                              matched=true
                              if [ ! "$_optargs" ]; then
                                 _optargs="${key_value}${_arg_sep}${optarg#*=}"
-                             elif __must_1_be_added_to_2_using_3_as_separator "${optarg#*=}" "${_optargs#*=}" "$_arg_sep"; then
+                             elif must_1_be_added_to_2_using_3_as_separator "${optarg#*=}" "${_optargs#*=}" "$_arg_sep"; then
                                 _optargs="${_optargs}${_key_value_sep}${key_value}${_arg_sep}${optarg#*=}"
                              fi
                           elif [ ! "$_optargs" ]; then
@@ -950,7 +947,7 @@ __get_accumulated_argument_vector() {
                           fi
                       done
                       ${matched} || _optargs="${_optargs}${_key_value_sep}${optarg}" ;;
-                   *) if __must_1_be_added_to_2_using_3_as_separator "$optarg" "$_optargs" "$_arg_sep"; then
+                   *) if must_1_be_added_to_2_using_3_as_separator "$optarg" "$_optargs" "$_arg_sep"; then
                          _optargs="${optargs}${_arg_sep}${optarg}"
                       fi                                                             ;;
        esac
@@ -960,7 +957,7 @@ __get_accumulated_argument_vector() {
 # Brief
 # Accumulate incremental option ${1} in ${__acc_opts} and, at the
 # same time, its argument(s) in ${__${1}_arguments}.
-__accumulate_option_and_arguments() {
+accumulate_option_and_arguments() {
     local opt="$1" optarg="$2"
     if [ ! "$__acc_opts" ]; then
        __acc_opts="$opt"
@@ -977,21 +974,21 @@ __accumulate_option_and_arguments() {
           __acc_opts="${__acc_opts}:${opt}"
        fi
     fi
-    eval "__${opt}_arguments=$(__get_accumulated_argument_vector "$opt" "$optarg")"
+    eval "__${opt}_arguments=$(get_accumulated_argument_vector "$opt" "$optarg")"
 }
 #
-__accumulate_mandatory_option_and_arguments_if_necessary() {
-    __remove_entry_from_required_options_if_necessary "$__opt"
+accumulate_mandatory_option_and_arguments_if_necessary() {
+    remove_entry_from_required_options_if_necessary "$__opt"
     if test "$(eval echo '$'__has_"${__opt}"_accumulator)" = "true"
     then
-       __accumulate_option_and_arguments "$__opt" "$__optarg"
-       __set_option_and_argument "" ""
+       accumulate_option_and_arguments "$__opt" "$__optarg"
+       set_option_and_argument "" ""
     fi
 }
 # Brief
 # Retrieve the first long alias for ${1} if ${1} does have aliases
 # else return ${1}.
-__get_readable_option_name() {
+get_readable_option_name() {
     local alias="$(eval echo '$'__${1}_first_long_alias)"
     if [ "$alias" ]; then
        printf "%s" "--${alias}"
@@ -1001,15 +998,15 @@ __get_readable_option_name() {
 }
 # Brief
 # Check whether ${1} conflicts with any previously scanned option.
-__has_conflicting_state() {
+has_conflicting_state() {
     eval "__has_opt_code_${1}_been_scanned=true"
     local opt conflicts="$(eval echo '$'__get_conflicting_options_with_"${1}")"
     if [ "$conflicts" ]; then
        for opt in $(__split_tokens_accordingly "," "$conflicts"); do
            if test "$(eval echo '$'__has_opt_code_"${opt}"_been_scanned)" = "true"
            then
-              __set_erroneous_option_and_argument "$__err_code_conflict_opt" "${opt}/${1}"
-              __alert_whenever "$__err_conflicting_option" "$(__get_readable_option_name "$opt")" "$(__get_readable_option_name "$1")"
+              set_erroneous_option_and_argument "$__err_code_conflict_opt" "${opt}/${1}"
+              alert_whenever "$__err_conflicting_option" "$(get_readable_option_name "$opt")" "$(get_readable_option_name "$1")"
               return 0
            fi
        done
@@ -1019,7 +1016,7 @@ __has_conflicting_state() {
 # Brief
 # Enrich the existing conflicts base with two new conflicts involving
 # ${1} and ${2}.
-__map_exclusive_options_pair() {
+map_exclusive_options_pair() {
     local opt conflict conflicts
     for opt in ${1} ${2}; do
         if [ "$opt" = "$1" ]; then
@@ -1036,13 +1033,13 @@ __map_exclusive_options_pair() {
 # Brief
 # Set the index ($1) of the positional parameter from which the parsing
 # is to be done.
-__argp_parse_set_index() {
+argp_parse_set_index() {
     __optindex="$1"
     eval "${_callback_opt}index=${1}"
 }
 # Brief
 # Build a valid option argument vector avoiding breaking spaces.
-__get_option_arguments() {
+get_option_arguments() {
     local opt="$1" argument_type="$(eval echo '$'__"${1}"_argument_type)"
     if [ "$(eval echo '$'__has_${opt}_accumulator)" = "true" -a "$argument_type" -a ! "${argument_type##key-value*}" ]; then
        eval printf "%s" '$'__${opt}_arguments|sed "s/${_key_value_sep}/ /g"
@@ -1053,10 +1050,10 @@ __get_option_arguments() {
 # Brief
 # Parse incremental options with their arguments and set the callback
 # state.
-__argp_parse_incremental_options() {
+argp_parse_incremental_options() {
     if [ "$__acc_opts" ]; then
-       __set_callback_option_and_argument "@${__acc_opts%%:*}" "$(__get_option_arguments "${__acc_opts%%:*}")"
-       __remove_entry_from_accumulated_options_if_necessary "${__acc_opts%%:*}"
+       set_callback_option_and_argument "@${__acc_opts%%:*}" "$(get_option_arguments "${__acc_opts%%:*}")"
+       remove_entry_from_accumulated_options_if_necessary "${__acc_opts%%:*}"
        return 0
     fi
     return 1
@@ -1064,18 +1061,18 @@ __argp_parse_incremental_options() {
 # Brief
 # Parse required/accumulated options with their arguments and set the
 # callback state.
-__argp_parse_accumulated_options() {
+argp_parse_accumulated_options() {
     if [ "$_req_opts" ]; then
        if ${_exit_on_error}; then
-           __syserr  "$__err_required_option_not_invoked" "$(__get_readable_option_name "${_req_opts%%,*}")"
+           syserr  "$__err_required_option_not_invoked" "$(get_readable_option_name "${_req_opts%%,*}")"
            exit 1
        else
-           __set_callback_option_and_argument "$__err_code_expected_opt" "${_req_opts%%,*}"
-           __remove_current_entry_from_required_and_accumulated_options "${_req_opts%%,*}"
+           set_callback_option_and_argument "$__err_code_expected_opt" "${_req_opts%%,*}"
+           remove_current_entry_from_required_and_accumulated_options "${_req_opts%%,*}"
            return 0
        fi
     else
-       __argp_parse_incremental_options
+       argp_parse_incremental_options
     fi
 }
 # Brief
@@ -1095,36 +1092,36 @@ __argp_parse() {
        _exit_on_error=true
        _req_opts=
        _excl_opts=
-       __read_parser_configuration_arguments "$@"
+       read_parser_configuration_arguments "$@"
        __noptindex="$?"
-       __init_option_mutators
-       __configure_parser || exit ${E_BAD_ARGS}
+       init_option_mutators
+       configure_parser || exit ${E_BAD_ARGS}
     fi
     #
     shift $((${__optindex} + ${__noptindex} - 1))
     if [ ${#} -ne 0 ]; then
-       __argp_parse_internal "$@"
+       argp_parse_internal "$@"
        r="$?"
     fi
-    __argp_parse_set_index $((${__optindex} + ${r} % ${E_END_OF_PARSING}))
+    argp_parse_set_index $((${__optindex} + ${r} % ${E_END_OF_PARSING}))
     #
     if [ ${r} -ge ${E_END_OF_PARSING} ]; then
-       __argp_parse_accumulated_options
+       argp_parse_accumulated_options
        return
     fi
     #
     case "$__opt" in :|\?|^) ${_exit_on_error} && exit 1 ;; esac
-    __set_callback_option_and_argument "$__opt" "$__optarg"
+    set_callback_option_and_argument "$__opt" "$__optarg"
     return 0
 }
 # Brief
 # Reset the parser state internally.
 __argp_parse_reset() {
-    __argp_parse_set_index 0
+    argp_parse_set_index 0
 }
 # Brief
 # Build a readable option argument description.
-__get_printable_option_argument_description() {
+get_printable_option_argument_description() {
     local arg_flag="$1" arg_type
     case "$arg_flag" in [1-2]@*) arg_type="${arg_flag#?@}"
                                  case "${arg_flag%%@*}" in
@@ -1142,7 +1139,7 @@ __get_printable_option_argument_description() {
 }
 # Brief
 # Build help output (printf) format
-__get_help_output_format() {
+get_help_output_format() {
     local token opt_code opt_code_max_length="${#1}"
     local aliases alias_max_length="${#2}"
     local arg_flag arg_type arg_flag_max_length="${#3}"
@@ -1153,7 +1150,7 @@ __end_main_opts" IFS="
     local alternate pad
     for token in ${mainopts}; do
         if [ "$token" != "__end_main_opts" ]; then
-           __read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
+           read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
            if [ "$unread" ]; then
               desc="${desc}:${unread}"
            fi
@@ -1168,13 +1165,13 @@ __end_main_opts" IFS="
               fi
               IFS="|"
               for alternate in ${aliases}; do
-                  alternate="$(__strip_ending_option_symbol "$alternate")"
+                  alternate="$(strip_ending_option_symbol "$alternate")"
                   if [ ${alias_max_length} -lt $((${#alternate} + ${pad})) ]; then
                      alias_max_length=$((${#alternate} + ${pad}))
                   fi
               done
            fi
-           arg_flag="$(__get_printable_option_argument_description "$arg_flag")"
+           arg_flag="$(get_printable_option_argument_description "$arg_flag")"
            if [ ${arg_flag_max_length} -lt ${#arg_flag} ]; then
               arg_flag_max_length="${#arg_flag}"
            fi
@@ -1197,11 +1194,11 @@ __end_main_opts" IFS="
 __argp_parse_opts_help() {
     local token opt_code aliases arg_flag arg_type desc unread IFS="
 "
-    local fmt="$(__get_help_output_format short long argument description)\n"
+    local fmt="$(get_help_output_format short long argument description)\n"
     {
       printf "\n%s\n\n" "Help usage: ${__shell} [options] <arguments> with the following option(s):"
       for token in ${_main_opts}; do
-         __read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
+         read_colon_separated_token "$token" 1 opt_code aliases arg_flag desc unread
          if [ "$unread" ]; then
             desc="${desc}:${unread}"
          fi
@@ -1210,16 +1207,16 @@ __argp_parse_opts_help() {
          else
             opt_code=""
          fi
-         arg_flag="$(__get_printable_option_argument_description "$arg_flag")"
+         arg_flag="$(get_printable_option_argument_description "$arg_flag")"
          if [ "$aliases" ]; then
             if [ ! "${aliases%%*!}" ]; then
                (local alternate IFS="|"
                 for alternate in ${aliases}; do
-                    alternate="$(__strip_ending_option_symbol "$alternate")"
+                    alternate="$(strip_ending_option_symbol "$alternate")"
                     printf "$fmt" "" "--no-${alternate}" "$arg_flag" "Similar to --no${alternate}, negate --${alternate}"
                 done)
             else
-               printf "$fmt" "$opt_code" "--$(__strip_ending_option_symbol "$aliases")" "$arg_flag" "$desc"
+               printf "$fmt" "$opt_code" "--$(strip_ending_option_symbol "$aliases")" "$arg_flag" "$desc"
             fi
          else
             printf "$fmt" "$opt_code" "" "$arg_flag" "$desc"

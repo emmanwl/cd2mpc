@@ -1,6 +1,6 @@
 #@IgnoreInspection BashAddShebang
-#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
-#@(#) All rights reserved.
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
 #@(#)
 #@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
 #@(#) provided these redistributions must retain the above copyright, this condition and the following
@@ -17,8 +17,8 @@
 #@(#)
 #@(#) This is liblog4shell, a shell script library inspired by log4j.
 
-. "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
+. "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
+__import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -43,34 +43,31 @@ __pattern_layout=
 __log_level=
 #
 # Brief
-# Zero-pad logger entries.
-_pad() { printf "%0${1}i" "$2"; }
-# Brief
 # Inject in the pattern layout itself any error regarding
 # an unrecognized specifier.
-_err() { printf "%s" "illegal format symbol ${1}"; }
+err() { printf "%s" "illegal format symbol ${1}"; }
 # Brief
 # Get the logger format using the pattern layout ${1}.
-__get_logger_format() {
+get_logger_format() {
     local layout="$1" expr fmt="+%Y-%d-%m %H:%M:%S" logger_format
     while [ ${#layout} -gt 0 ]; do
         case "$layout" in
              %*) layout="${layout#%}"
                  case "$layout" in
-                       L*) expr="@{level%%_*}"                     ;;
-                       D*) expr="@(date '${fmt}')"                 ;;
-                       F*) expr="@{__shell}"                       ;;
-                       H*) expr="@(hostname)"                      ;;
-                       M*) expr="%s"                               ;;
-                       P*) expr="@@"                               ;;
-                       %*) expr="%%"                               ;;
-                        *) expr=$(_err "${layout%%"${layout#?}"}") ;;
-                 esac                                              ;;
+                       L*) expr="@{level%%_*}"                    ;;
+                       D*) expr="@(date '${fmt}')"                ;;
+                       F*) expr="@{__shell}"                      ;;
+                       H*) expr="@(hostname)"                     ;;
+                       M*) expr="%s"                              ;;
+                       P*) expr="@@"                              ;;
+                       %*) expr="%%"                              ;;
+                        *) expr=$(err "${layout%%"${layout#?}"}") ;;
+                 esac                                             ;;
               *) expr="${layout%"${layout#?}"}"
                  case "$expr" in
-                           \)|\(|\|) expr="'${expr}'"              ;;
-                                " ") expr=" "                      ;;
-                 esac                                              ;;
+                           \)|\(|\|) expr="'${expr}'"             ;;
+                                " ") expr=" "                     ;;
+                 esac                                             ;;
         esac
         layout="${layout#?}"
         if [ "$logger_format" ]; then
@@ -94,7 +91,7 @@ __append_per_level=
 __console_appender=
 # Brief
 # Get the file appender.
-__get_file_appender() {
+get_file_appender() {
     local appender="${1:-"/dev/null"}"
     if [ -d "$appender" -a -w "$appender" ]; then
        appender="${appender}/${__shell}.log"
@@ -111,7 +108,7 @@ __get_file_appender() {
 }
 # Brief
 # Get the console appender.
-__get_console_appender() {
+get_console_appender() {
     local appender="${1:="/dev/null"}" term=$(tty)
     if [ "$appender" -eq "$appender" -a -t "$appender" -a "$appender" != "${term##*/}" ] 2>/dev/null
     then
@@ -123,7 +120,7 @@ __get_console_appender() {
 }
 # Brief
 # Get a numerical debug level value.
-__get_log_level() {
+get_log_level() {
     local log_level="$1"
     case "$log_level" in
          [1-6])             ;;
@@ -137,48 +134,48 @@ __get_log_level() {
 # Brief
 # Log whenever.
 logger_unconditionally() {
-    __logger "TEST_32" "$@"
+    logger "TEST_32" "$@"
 }
 # Brief
 # Trace logger.
 logger_trace() {
     if [ ${__log_level} -eq 1 ]; then
-       __logger "TRACE_35" "$@"
+       logger "TRACE_35" "$@"
     fi
 }
 # Brief
 # Debug logger.
 logger_debug() {
     if [ ${__log_level} -le 2 ]; then
-       __logger "DEBUG_32" "$@"
+       logger "DEBUG_32" "$@"
     fi
 }
 # Brief
 # Info logger.
 logger_info() {
     if [ ${__log_level} -le 3 ]; then
-       __logger "INFO_34" "$@"
+       logger "INFO_34" "$@"
     fi
 }
 # Brief
 # Warn logger.
 logger_warn() {
     if [ ${__log_level} -le 4 ]; then
-       __logger "WARN_35" "$@"
+       logger "WARN_35" "$@"
     fi
 }
 # Brief
 # Error logger.
 logger_error() {
     if [ ${__log_level} -le 5 ]; then
-       __logger "ERROR_31" "$@"
+       logger "ERROR_31" "$@"
     fi
 }
 # Brief
 # Fatal logger.
 logger_fatal() {
     if [ ${__log_level} -le 6 ]; then
-       __logger "FATAL_31" "$@"
+       logger "FATAL_31" "$@"
     fi
 }
 # Brief
@@ -194,12 +191,12 @@ DEBUGOUT() {
 }
 # Brief
 # A dedicated wrapper function that embeds the logger and the appender(s).
-__logger() {
-    __logger_internal "${@}"| __append_once "${1%%_*}" "${1##*_}"
+logger() {
+    logger_internal "${@}"| append_once "${1%%_*}" "${1##*_}"
 }
 # Brief
 # Report, according the log level, the input message to the standard output.
-__logger_internal() {
+logger_internal() {
     local level="$1" message="$2"
     shift 2
     while :; do case "$message" in \\n*) message="${message#\\n}" ;;
@@ -216,12 +213,12 @@ __logger_internal() {
 # Brief
 # A dedicated wrapper that embeds both the file and the console appender
 # (colourfully).
-__append_once() {
-    __append_to_file "$1"|__colorize "$2"|__append_to_console
+append_once() {
+    append_to_file "$1"|colorize "$2"|append_to_console
 }
 # Brief
 # Append to the selected file.
-__append_to_file() {
+append_to_file() {
     if ${__append_per_level:=false} && [ "$__file_appender" != "/dev/null" -a "$1" != "TEST" ]; then
        tee -a "$__file_appender" "${__file_appender}.${1}"
     else
@@ -230,25 +227,26 @@ __append_to_file() {
 }
 # Brief
 # Colorize the output accordingly.
-__colorize() {
+colorize() {
     local esc=$(printf "\033"); sed "s/.*/${esc}[${1}m&${esc}[0m/g"
 }
 # Brief
 # Append to the selected console.
-__append_to_console() {
+append_to_console() {
     tee -a "$__console_appender" 2>/dev/null
 }
 #
-__configure() {
+configure_logger() {
     while [ ${#} -gt 0 ]; do
         case "${1%%=*}" in
-           --console-appender) __console_appender="$(__get_console_appender "$(__first_not_empty "${1#*=}" "$2")")" ;;
-              --file-appender) __file_appender="$(__get_file_appender "$(__first_not_empty "${1#*=}" "$2")")"       ;;
-           --append-per-level) __append_per_level=true                                                              ;;
-                  --log-level) __log_level="$(__get_log_level "$(__first_not_empty "${1#*=}" "$2")")"               ;;
-              --logger-format) __logger_format="$(__get_logger_format "$(__first_not_empty "${1#*=}" "$2")")"       ;;
+           --console-appender) __console_appender="$(get_console_appender "${1#*=}")" ;;
+              --file-appender) __file_appender="$(get_file_appender "${1#*=}")"       ;;
+           --append-per-level) __append_per_level=true                                ;;
+                  --log-level) __log_level="$(get_log_level "${1#*=}")"               ;;
+              --logger-format) __logger_format="$(get_logger_format "${1#*=}")"       ;;
+                       --conf) __import_resource "${1#*=}"                            ;;
         esac
         shift
     done
 }
-__configure --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="$__default_pattern_layout"}" "$@"
+configure_logger "$@" --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="$__default_pattern_layout"}"

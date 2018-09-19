@@ -1,0 +1,111 @@
+#@IgnoreInspection BashAddShebang
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
+#@(#)
+#@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
+#@(#) provided these redistributions must retain the above copyright, this condition and the following
+#@(#) disclaimer.
+#@(#)
+#@(#) THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR IMPLIED
+#@(#) WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+#@(#) FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE
+#@(#) FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING
+#@(#) PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTER-
+#@(#) -RUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+#@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+#@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#@(#)
+#@(#) This produces a makefile to build/test/install the bootstraped distribution.
+
+search_for_imported_resources() {
+    perl -ne "print if s#[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"{0,1}(?:<__.*__>/)([^\"]+)\"{0,1}.*#\1#g" "$1"
+}
+
+load_resource_recursively() {
+    local working_directory="$1" perl_replace_expression="$2" resource
+    shift 2
+    if [ ! -e "$1" ]; then
+       printf "Could not find resolve resource ${1}, exiting\n" >&2
+       return 1
+    fi
+    for resource in $(search_for_imported_resources "$1"); do
+        load_resource_recursively "$working_directory" "$perl_replace_expression" "$resource"
+    done
+    if [ ! -e "${working_directory}/${1}" ]; then
+       perl -pe "$perl_replace_expression" "$1" > "${working_directory}/${1}"
+       if [ -s "${working_directory}/${1}" ]; then
+          . "${working_directory}/${1}"
+       fi
+    fi
+}
+
+goal_perl_replace_expression() {
+    local working_directory="$1" expression
+    shift 
+    while [ ${#} -gt 0 ]; do
+        case "$1" in
+           __*__=*) if [ ! "${1##*=*}" ]; then
+                       if [ "$expression" ]; then
+                          expression="${expression};s#<${1%%=*}>#${working_directory}#g"
+                       else
+                          expression="s#<${1%%=*}>#${working_directory}#g"
+                       fi
+                    fi ;;
+        esac
+        shift
+    done
+    printf "%s" "$expression"
+}
+
+makefile_perl_replace_expression() {
+    local working_directory="$1" expression arg
+    shift 
+    while [ ${#} -gt 0 ]; do
+        case "$1" in
+           --search-replace|-s) if [ ${#} -ge 2 ]; then
+                                   if [ ! "${2##*=*}" -a "${2%%=*}" ]; then
+                                      if [ "$expression" ]; then
+                                         expression="${expression};s#<__${2%%=*}__>#${working_directory}#g"
+                                      else
+                                         expression="s#<__${2%%=*}__>#${working_directory}#g"
+                                      fi
+                                   fi
+                                   shift
+                                fi ;;
+            --search-replace=*) arg="${1#*=}"
+                                if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
+                                   if [ "$expression" ]; then
+                                      expression="${expression};s#<__${arg%%=*}__>#${working_directory}#g"
+                                   else
+                                      expression="s#<__${arg%%=*}__>#${working_directory}#g"
+                                   fi
+                                fi ;;
+                           -s*) arg="${1#-s}"
+                                if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
+                                   if [ "$expression" ]; then
+                                      expression="${expression};s#<__${arg%%=*}__>#${working_directory}#g"
+                                   else
+                                      expression="s#<__${arg%%=*}__>#${working_directory}#g"
+                                   fi
+                                fi ;;
+        esac
+        shift
+    done
+    printf "%s" "$expression"
+}
+
+bootstrap_libconfigure() {
+    local working_directory="$1"
+    local perl_replace_expression="$(goal_perl_replace_expression "$working_directory" "$@")"
+    load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
+}
+
+__configure() {
+    local working_directory="${TMPDIR:-/tmp}/$(basename "$0")."$$
+    mkdir -p "$working_directory"
+    local perl_replace_expression="$(makefile_perl_replace_expression "$working_directory" "$@")"
+    load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
+    __generate_makefile "$@" --define WORKING_DIR="${TMPDIR:-/tmp}/configure.target"
+    rm -rf "$working_directory"
+}
+

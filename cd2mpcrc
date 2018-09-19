@@ -42,27 +42,4 @@ SINGLE_MASK="%T - %A - %Y"
 CREATE_PLAYLIST=true
 # Indicates <true,false:default> whether the disc will be rejected from tray
 EJECT_FROM_TRAY=false
-# The following section deals with the logger configuration, hence the
-# case change.
-# The standard output pattern layout is used to format each logger
-# entry. This parameter must be made of a subset of the following
-# specifiers shipped with a leading '%':
-# - L (the logger level)
-# - D (the logging timestamp "y-m-d hour(24):min:sec")
-# - F (the file where the logging event occurred)
-# - H (the hostname)
-# - M (the message)
-# - P (the pid of the current process)
-# - % (the literal percent sign '%')
-#
-__pattern_layout="%D - {%H} - (%L) - %F | %M"
-# The log level can be set to either <1:TRACE>, <2:DEBUG>, <3:INFO>,
-# <4:WARN>, <5:ERROR> or <6:FATAL> so only messages having the same
-# severity (or above) will be logged.
-__log_level=DEBUG
-# Appenders properties.
-# This console tty descriptor number
-__file_appender=/tmp
-__cons_appender=
-# Additional appending options.
-__append_per_level=true
+

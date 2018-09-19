@@ -1,5 +1,13 @@
 #@IgnoreInspection BashAddShebang
 # Brief
+# Define error codes to use in return/exit
+# statements.
+E_SUCCESS=0
+E_FAILURE=1
+E_BAD_ARGS=65
+E_END_OF_PARSING=127
+E_SIG_INT=128
+# Brief
 # Accumulate tokens (all but last positional
 # parameters) in a list (last parameter).
 __accumulate() {
@@ -21,14 +29,23 @@ __accumulate() {
 # make sure that each token is added only
 # once.
 __accumulate_once() {
-    local name value
+    local name value token matched
     for name in ${@}; do :; done
     values="$(eval echo '$'"${name}")"
     while [ ${#} -gt 1 ]; do
         if [ ! "$values" ]; then
            eval "${name}='${1}'"
-        elif [ "${values##*"${1%%=*}"*}" ]; then
-           eval "${name}='${values} ${1}'"
+        else
+           matched=false
+           for token in $(__split_tokens_accordingly " " "$values"); do
+               if [ "$token" = "${1%%=*}" ]; then
+                  matched=true
+                  break
+               fi
+           done
+           if ! ${matched}; then
+              eval "${name}='${values} ${1}'"
+           fi
         fi
         values="$(eval echo '$'"${name}")"
         shift
@@ -71,12 +88,11 @@ __append() {
        for token in $(__split_tokens_accordingly "$3" "$tokens"); do
            if [ "$token" = "$1" ]; then
               printf "%s" "$tokens"
-              return 1
+              return ${E_FAILURE}
            fi
        done
        printf "%s" "${tokens}${3}${1}"
     fi
-    return 0
 }
 # Brief
 # Left pad ${1} with zeros.
@@ -102,16 +118,23 @@ __is_path() { __is_of_match "$1" "^(/+((\.){0,1}[[:alnum:]]+((-|_)*[[:alnum:]]+)
 # Sanitize ${1}.
 __munge() { printf "%s" "$1"|sed -e "s/\/\{1,\}/_/g;s/@/_/g"|tr -d ";?[:cntrl:]"; }
 # Brief
-# Remove leading and trailing space characters.
-__trim() {
-    local string="$1"
-    while [ "${string%"${string#?}"}" = " " ]; do
-        string="${string# }"
+# Remove leading and trailing ${2} characters
+# from ${1}.
+__trim_char() {
+    local string="$1" char="$2"
+    while [ "${string%"${string#?}"}" = "$char" ]; do
+        string="${string#"${char}"}"
     done
-    while [ "${string#"${string%?}"}" = " " ]; do
-        string="${string% }"
+    while [ "${string#"${string%?}"}" = "$char" ]; do
+        string="${string%"${char}"}"
     done
     printf "%s" "$string"
+}
+# Brief
+# Remove leading and trailing space characters
+# from ${1}.
+__trim() {
+    __trim_char "$1" " "
 }
 # Brief
 # Remove all space characters.
@@ -142,7 +165,7 @@ __read_separator_delimited_token() {
     read -- "$@" last<<EOF
 ${token}
 EOF
-    return 0
+    return ${E_SUCCESS}
 }
 # Brief
 # Replace all hyphens with underscores in the
@@ -202,16 +225,16 @@ __entry_points() {
     local file prefix suffix randomize=false entry_points entry
     while [ ${#} -gt 0 ]; do
         case "${1%%=*}" in
-               --prefix) prefix="$(__first_not_empty "${1#*=}" "$2")"       ;;
-               --suffix) suffix="$(__first_not_empty "${1#*=}" "$2")"       ;;
+               --prefix) prefix="$(__first_not_empty "${1#*=}" "__should")" ;;
+               --suffix) suffix="$(__first_not_empty "${1#*=}" "_test")"    ;;
              --randomly) randomize=true                                     ;;
                  --file) file="$(__first_not_empty "${1#*=}" "$2")"         ;;
-             --append=*) entry_points="$(__first_not_empty "${1#*=}" "$2")" ;;
+             --append=*) entry_points="${1#*=}"                             ;;
         esac
         shift
     done
-    if [ ! "$file" ]; then
-       return 1
+    if [ ! -s "$file" ]; then
+       return ${E_FAILURE}
     fi
     #
     {
@@ -229,5 +252,5 @@ __entry_points() {
          sort
       fi
     } | uniq
-    return 0
+    return ${E_SUCCESS}
 }

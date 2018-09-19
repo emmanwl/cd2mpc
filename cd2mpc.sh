@@ -1,6 +1,6 @@
 #! /usr/bin/env sh
-#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
-#@(#) All rights reserved.
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
 #@(#)
 #@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
 #@(#) provided these redistributions must retain the above copyright, this condition and the following
@@ -20,14 +20,10 @@
 #@(#) a full usage information.
 CD2MPC_VERSION=15.0
 
-E_SUCCESS=0
-E_FAILURE=1
-E_SIG_INT=128
+. "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
+__import_resource_or_fail "<__lib_dir__>/liboptwrapper.sh"
+__import_resource_or_fail "<__lib_dir__>/liblog4shell.sh" --conf="<__cd2mpcrc__>"
 
-. "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource "<__cd2mpcrc__>"
-__import_resource_or_fail "<__libs4shell__>/liboptwrapper.sh"
-__import_resource_or_fail "<__libs4shell__>/liblog4shell.sh"
 stty -echo 2>/dev/null
 
 # Shell name
@@ -88,7 +84,7 @@ inspect_encoding_options() {
     DEBUGIN inspect_encoding_options
     if ! __is_of_match "${OVERWRITE_BEHAVIOUR:=prompt}" "^(prompt|skip|force)$"
     then
-       logger_error "Unknown overwriting mode '${OVERWRITE_BEHAVIOUR}', falling back to skip"
+       logger_warn "Unknown overwriting mode '${OVERWRITE_BEHAVIOUR}', falling back to skip"
        OVERWRITE_BEHAVIOUR="skip"
     fi
     logger_info "File overwrite behaviour: '${OVERWRITE_BEHAVIOUR}'"
@@ -97,7 +93,7 @@ inspect_encoding_options() {
     for ext in ${ENCODING_VECTOR:=mpc}; do
         case "$ext" in mpc) encoder="mpcenc" ;; flac) encoder="flac" ;; mp3) encoder="lame" ;; esac
         if ! is_binary "$encoder"; then
-           logger_error "Couldn't find suitable '${ext}' encoder ('${encoder}'), removing it from the encoding vector"
+           logger_warn "Couldn't find suitable '${ext}' encoder ('${encoder}'), removing it from the encoding vector"
            __remove "$ext" ENCODING_VECTOR
         fi
     done
@@ -120,7 +116,7 @@ inspect_encoding_options() {
     logger_info "Naming mask set to: '${TAG_MASK}'"
     #
     if ! __is_of_match "${MAX_PROCESS:=1}" "^[1-9][[:digit:]]{0,1}$"; then
-       logger_error "Illegal max simultaneous encoding value, falling back to 1"
+       logger_warn "Unrecognized value for max simultaneous encoding processes, falling-back to a conservative value"
        MAX_PROCESS=1
     fi
     logger_info "Max concurrent encoding jobs: '${MAX_PROCESS}'"
@@ -135,14 +131,14 @@ inspect_cddb_options() {
        return ${E_FAILURE}
     fi
     if ! __is_of_match "${CDDB_PROTOCOL:=cddbp}" "^(http|cddbp|proxy)$"; then
-       logger_error "Illegal protocol value '${CDDB_PROTOCOL}', falling back to cddbp"
+       logger_warn "Illegal protocol value '${CDDB_PROTOCOL}', falling back to cddbp"
        CDDB_PROTOCOL="cddbp"
     fi
     if ! __is_of_match "${CDDB_PORT:=888}" "^[1-9][[:digit:]]{2,4}$"; then
-       logger_error "Illegal port value '${CDDB_PORT}', falling back to 888"
+       logger_warn "Illegal port value '${CDDB_PORT}', falling back to 888"
        CDDB_PORT=888
     fi
-     if ! is_path "${CDDB_CACHE_LOCATION:=${HOME}/.cddbslave}"; then
+    if ! is_path "${CDDB_CACHE_LOCATION:=${HOME}/.cddbslave}"; then
        logger_fatal "Invalid cache directory '${CDDB_CACHE_LOCATION}'"
        return ${E_FAILURE}
     fi
@@ -154,7 +150,7 @@ inspect_cddb_options() {
     do
        case "$category" in
             folk|jazz|misc|rock|country|blues|newage|reggae|classical|soundtrack) ;;
-            *) logger_error "Illegal cddb category '${category}', removing it from the cddb categories lookup"
+            *) logger_warn "Illegal cddb category '${category}', removing it from the cddb categories lookup"
                __remove "$category" CDDB_VECTOR ;;
        esac
     done
@@ -599,11 +595,11 @@ transcode() {
         TITLE="$(eval echo '$'TITLE_${TRACK})"
         file="${WORKING_CONTEXT}/track${TRACK}.cdda.wav"
         if [ ! -e "$file" ]; then
-           logger_error "Skipping encoding of missing file ${file}"
+           logger_warn "Skipping encoding of missing file ${file}"
            continue
         elif ! __is_in "^$(fsum "$file" "$TRACK")$" "${WORKING_CONTEXT}/${1}"
         then
-           logger_error "File checksum mismatch, skipping"
+           logger_warn "File checksum mismatch, skipping"
            continue
         fi
         for ext in ${ENCODING_VECTOR}; do
@@ -680,7 +676,6 @@ release_resources() {
 # Control user interruptions.
 upon_interrupt() {
     DEBUGIN upon_interrupt
-    local file
     logger_info "Aborting, waiting for task(s) to complete..."
     wait
     DEBUGOUT upon_interrupt ${E_SIG_INT}
@@ -769,7 +764,7 @@ if [ ${_optindex} -ne 0 ]; then
    shift $((${_optindex} - 1))
 fi
 
-initialize_working_context && inspect_options && \
+inspect_options && initialize_working_context && \
 {
   acquire_cd_info && rip_and_encode && \
   {

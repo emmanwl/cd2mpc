@@ -1,6 +1,6 @@
 #@IgnoreInspection BashAddShebang
-#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
-#@(#) All rights reserved.
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
 #@(#)
 #@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
 #@(#) provided these redistributions must retain the above copyright, this condition and the following
@@ -19,8 +19,8 @@
 #@(#) provides the user with an extra indirection level for extending the default parsing behaviour.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
-. "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libs4shell__>/libopt4shell.sh"
+. "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
+__import_resource_or_fail "<__lib_dir__>/libopt4shell.sh"
 
 # Mutators
 __look_for_parsing_extensions=true

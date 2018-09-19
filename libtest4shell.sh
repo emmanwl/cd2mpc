@@ -1,6 +1,6 @@
 #@IgnoreInspection BashAddShebang
-#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018 - E.de.Sars
-#@(#) All rights reserved.
+#@(#) Copyright (c) 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019
+#@(#) E.de.Sars - All rights reserved.
 #@(#)
 #@(#) Redistribution and use in source and binary forms, with or without modification, are permitted
 #@(#) provided these redistributions must retain the above copyright, this condition and the following
@@ -15,11 +15,11 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libtest4shell, a test lib for shell. 
+#@(#) This is libtest4shell, a shell script library for testing.
 
-. "<__libs4shell__>/imports.sh" 2>/dev/null
-__import_resource_or_fail "<__libs4shell__>/lib4shell.sh"
-__import_resource_or_fail "<__libs4shell__>/liblog4shell.sh" --file-appender=/dev/null
+. "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
+__import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/liblog4shell.sh" --file-appender=/dev/null
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -34,7 +34,7 @@ __call_function_a_certain_number_of_times() {
     done
     if ! type "$f" >/dev/null 2>&1; then
        logger_error "Function ${f} was not defined in current env, exiting."
-       return 127
+       return ${E_END_OF_PARSING}
     fi 
     while :; do
 	"$f" "$@"
@@ -50,10 +50,10 @@ __call_function_a_certain_number_of_times() {
 # starts with "__should_" and ends with "_test".
 __run_test_suite_randomly() {
     local test has_failed=false
-    for test in $(__entry_points --prefix=__should_ --suffix=_test --randomly --file="$1"); do
+    for test in $(__entry_points --prefix=should_ --suffix=_test --randomly --file="$1"); do
         if ! eval ${test}; then
            has_failed=true
         fi
     done
-    ${has_failed} && return 1 || return 0
+    ${has_failed} && return ${E_FAILURE} || return ${E_SUCCESS}
 }
