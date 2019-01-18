@@ -100,12 +100,12 @@ bootstrap_libconfigure() {
     load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
 }
 
-__configure() {
+__bootstrap() {
     local working_directory="${TMPDIR:-/tmp}/$(basename "$0")."$$
     mkdir -p "$working_directory"
     local perl_replace_expression="$(makefile_perl_replace_expression "$working_directory" "$@")"
     load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
-    __generate_makefile "$@" --define WORKING_DIR="${TMPDIR:-/tmp}/configure.target"
+    __configure "$@" --define WORKING_DIR="${TMPDIR:-/tmp}/configure.target"
     rm -rf "$working_directory"
 }
 

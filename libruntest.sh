@@ -15,7 +15,7 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libtest4shell, a shell script library for testing.
+#@(#) This is libruntest, a shell script library for running automated tests.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
 __import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
@@ -33,7 +33,7 @@ __call_function_a_certain_number_of_times() {
         esac
     done
     if ! type "$f" >/dev/null 2>&1; then
-       logger_error "Function ${f} was not defined in current env, exiting."
+       __logger_error "Function ${f} was not defined in current env, exiting."
        return ${E_END_OF_PARSING}
     fi 
     while :; do
@@ -48,7 +48,7 @@ __call_function_a_certain_number_of_times() {
 # Brief
 # Run randomly all test functions defined in ${1}: functions whose name
 # starts with "__should_" and ends with "_test".
-__run_test_suite_randomly() {
+__run_test_suite() {
     local test has_failed=false
     for test in $(__entry_points --prefix=should_ --suffix=_test --randomly --file="$1"); do
         if ! eval ${test}; then

@@ -15,24 +15,24 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is liboptwrapper, a wrapper for the libopt4shell API. It exposes the API entry points and
-#@(#) provides the user with an extra indirection level for extending the default parsing behaviour.
+#@(#) This is libop4swrapper, a wrapper for the liboptparse4shell API. It exposes the API entry points
+#@(#) and provides the user with an extra indirection level for extending the default parsing behaviour.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libopt4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
 
 # Mutators
 __look_for_parsing_extensions=true
 # Brief
 # Main parser point of entry.
-argp_parse() {
+opt_parse() {
     local arg
     if ${__look_for_parsing_extensions}; then
        for arg; do
            if [ ! "${arg##/*}" ]; then
               case "${arg#/}" in
-              help|\?) argp_parse_help
+              help|\?) opt_parse_help
                        return 1 ;;
               esac 2>/dev/null
            else
@@ -41,30 +41,30 @@ argp_parse() {
        done
        __look_for_parsing_extensions=false
     fi
-    __argp_parse "$@"
+    __opt_parse "$@"
 }
 # Brief
 # Reset the whole parsing context
-# so argp_parse can be reentrant.
-argp_parse_reset() {
+# so opt_parse can be reentrant.
+opt_parse_reset() {
     __look_for_parsing_extensions=true
-    __argp_parse_reset
+    __opt_parse_reset
 }
 # Brief
 # Configured parser usage.
-argp_parse_opts_help() {
-    __argp_parse_opts_help
+opt_parse_opts_help() {
+    __opt_parse_opts_help
 }
 # Brief
 # General parser usage.
-argp_parse_help() {
+opt_parse_help() {
 less <<__help_information
 
-This embeds libopt4shell, a shell API for parsing command line parameters. It handles
-short/long options and features noticeably: option bundling, option abbreviation to
-uniqueness, option aliasing and argument type checking.
+This embeds liboptparse4shell, a shell API for parsing command line parameters.
+It handles short/long options and features noticeably: option bundling, option
+abbreviation to uniqueness, option aliasing and argument type checking.
 
-argp_parse accepts the following switches:
+opt_parse accepts the following switches:
   - /options=<...>                 (mandatory): to set the options table
   - /callback-option-prefix=<...>  (optional) : to override the prefix of the
                                                 place holders tracking the
@@ -152,7 +152,7 @@ either:
          This fail-fast mode stops the option scanning when reaching the first
          non-option argument
 
-At first call, argp_parse sets the option index to the index of the first option
+At first call, opt_parse sets the option index to the index of the first option
 word to scan. This option word is then splitted according its short or long option
 nature. The resulting tokens are then matched as the option and its argument(s)
 through the use of two callback variables. From call to call, those two configurable
@@ -171,37 +171,37 @@ is an incremental form of a known option, its option code is stored in a dedicat
 vector and potential arguments are accumulated. Both are then emptied for the parser
 to return 0.
 
-When argp_parse run out of input, it will iterate over each accumulated option code in
+When opt_parse run out of input, it will iterate over each accumulated option code in
 the accumulated option string and will repeatedly set the callback option to the
 concatenation of '@' and that option code. It will, as well, set the option argument to
 the string holding the mapped option arguments accumulated so far. By default, the long
 option matching is case-sensitive but this behaviour can be configured within the use of
-the /case-insensitive switch. If all elements have been scanned or when argp_parse hits
+the /case-insensitive switch. If all elements have been scanned or when opt_parse hits
 the word '--', it will return 1, which will end the whole option scanning.
 
-When argp_parse encounters an illegal or ambiguous option, it sets the callback option
+When opt_parse encounters an illegal or ambiguous option, it sets the callback option
 to '?' and its argument to the empty string. If /do-not-exit-on-error is provided, the
 callback option argument is set to the faulty option, otherwise the error is reported
 on stderr.
 
-When argp_parse encounters a missing/superfluous option argument or an option arg. that
+When opt_parse encounters a missing/superfluous option argument or an option arg. that
 is not of the expected type, it sets the callback option to '?' and its argument to the
 empty string. If /do-not-exit-on-error is provided, it sets the callback option to ':'
 and its argument to the faulty option, otherwise the error is reported on stderr.
 
-For conformance with existing APIs, argp_parse can be provided with the /long-only switch.
+For conformance with existing APIs, opt_parse can be provided with the /long-only switch.
 This allows to treat options prefixed with a single dash as regular long options.
-If no match is found during the long pass, argp_parse will fall-back to the short option
+If no match is found during the long pass, opt_parse will fall-back to the short option
 parsing heuristic.
 
 The API can also handle POSIX(.2) style of options provided it has been configured with
 the /allow-posix-long-option switch. Thus, if 'foo' is a long option holding a mandatory
-argument, argp_parse will recognize -Wfoo=bar or -W foo=bar as --foo=bar.
+argument, opt_parse will recognize -Wfoo=bar or -W foo=bar as --foo=bar.
 
 The API offers a /required-options switch to specify a set of short or long options
 (a coma-separated list of options codes) that can't be found, at the same time, on the
 command line.
-When a required option is reported as absent from the command line, argp_parse sets the
+When a required option is reported as absent from the command line, opt_parse sets the
 callback option to '?' and its argument to the empty string. If /do-not-exit-on-error is
 provided, it sets the callback option to ',' and its argument to the first missing required
 option (and repeatedly for each missing required option), otherwise the error is reported
@@ -210,7 +210,7 @@ on stderr.
 The API also offers the /exclusive-options switch to define a set of mutually exclusive
 options. That switch takes a list of options codes as argument and can be invoked multiple
 times to specify multiple groups of mutually exclusive options. If two options within
-the same group are to be found on the command line, argp_parse sets the callback option
+the same group are to be found on the command line, opt_parse sets the callback option
 to '?' and its argument to the empty string.
 Similarly, if /do-not-exit-on-error is provided, it sets the callback option to '^' and
 its argument to '<opt_a>/<opt_b>' where <opt_a>/<opt_b> denotes the conflicting option
@@ -221,17 +221,17 @@ argument vector, the API provides the /argument-separator=<argument> switch. Tho
 can filtered to uniqueness if the parser is given the /trim-option-arguments-to-uniqueness
 switch.
 
-At last, the API provides the argp_parse_opts_help function to report to the user the whole
+At last, the API provides the opt_parse_opts_help function to report to the user the whole
 usage information.
 
 To process a new set of options, the caller has to reset explicitly any ongoing option
-scanning by calling the argp_parse_reset function.
+scanning by calling the opt_parse_reset function.
 
 It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
 Example:
 
-while argp_parse /options="h:help:0:Print this help
+while opt_parse /options="h:help:0:Print this help
                            v:verbose!:0:...
                            i:increment@:1:...
                            a:arg:1@integer:..."\\
@@ -240,7 +240,7 @@ while argp_parse /options="h:help:0:Print this help
                  /long-only "\$@"
 do
       case "\$_opt" in
-           h) argp_parse_opts_help ;;
+           h) opt_parse_opts_help ;;
            v) echo set verbosity on ;;
          \!v) echo set verbosity off ;;
          \@i) echo accumulated arguments are \$_optarg ;;

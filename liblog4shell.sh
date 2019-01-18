@@ -133,60 +133,60 @@ get_log_level() {
 }
 # Brief
 # Log whenever.
-logger_unconditionally() {
+__logger_unconditionally() {
     logger "TEST_32" "$@"
 }
 # Brief
 # Trace logger.
-logger_trace() {
+__logger_trace() {
     if [ ${__log_level} -eq 1 ]; then
        logger "TRACE_35" "$@"
     fi
 }
 # Brief
 # Debug logger.
-logger_debug() {
+__logger_debug() {
     if [ ${__log_level} -le 2 ]; then
        logger "DEBUG_32" "$@"
     fi
 }
 # Brief
 # Info logger.
-logger_info() {
+__logger_info() {
     if [ ${__log_level} -le 3 ]; then
        logger "INFO_34" "$@"
     fi
 }
 # Brief
 # Warn logger.
-logger_warn() {
+__logger_warn() {
     if [ ${__log_level} -le 4 ]; then
        logger "WARN_35" "$@"
     fi
 }
 # Brief
 # Error logger.
-logger_error() {
+__logger_error() {
     if [ ${__log_level} -le 5 ]; then
        logger "ERROR_31" "$@"
     fi
 }
 # Brief
 # Fatal logger.
-logger_fatal() {
+__logger_fatal() {
     if [ ${__log_level} -le 6 ]; then
        logger "FATAL_31" "$@"
     fi
 }
 # Brief
 # Stack trace in.
-DEBUGIN() {
-    logger_trace "<< [$1]"
+__DEBUGIN() {
+    __logger_trace "<< [$1]"
 }
 # Brief
 # Stack trace out.
-DEBUGOUT() {
-    logger_trace ">> [$1]"
+__DEBUGOUT() {
+    __logger_trace ">> [$1]"
     return "$2"
 }
 # Brief
@@ -236,7 +236,7 @@ append_to_console() {
     tee -a "$__console_appender" 2>/dev/null
 }
 #
-configure_logger() {
+configure() {
     while [ ${#} -gt 0 ]; do
         case "${1%%=*}" in
            --console-appender) __console_appender="$(get_console_appender "${1#*=}")" ;;
@@ -249,4 +249,4 @@ configure_logger() {
         shift
     done
 }
-configure_logger "$@" --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="$__default_pattern_layout"}"
+configure "$@" --console-appender="${__console_appender:="/dev/null"}" --file-appender="${__file_appender:="/dev/null"}" --log-level="${__log_level:="DEBUG"}" --logger-format="${__pattern_layout:="$__default_pattern_layout"}"

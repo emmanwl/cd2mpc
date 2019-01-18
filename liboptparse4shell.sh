@@ -15,7 +15,7 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libopt4shell, a shell API for parsing command line parameters. It handles short/long
+#@(#) This is liboptparse4shell, a shell API for parsing command line parameters. It handles short/long
 #@(#) options and features option bundling, option abbreviation to uniqueness, option aliasing,
 #@(#) negatable and incremental style of options as well as (option) argument type checking.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
@@ -26,7 +26,7 @@ __import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
 # Shell name
 __shell="$(__get_shell_name "$0")"
 # Parser name
-__parser=argp_parse
+__parser=opt_parse
 #
 # ${_main_opts} is a line-oriented set of entries holding short/long options to parse.
 # Short options refer to single alphanumeric characters prepended with a single dash.
@@ -80,7 +80,7 @@ __shrt_rgxp="^([[:alnum:]]+:{0,2})+$"
 # presentation, arguments are stored in a vector) if that same alias string ends
 # with the character '@'.
 #
-# At first call, argp_parse sets {__optindex} to the index of the first option word
+# At first call, opt_parse sets {__optindex} to the index of the first option word
 # to scan, see {__optwrd}. This option word is then splitted according its short or
 # long option nature. The resulting tokens are then matched as the option and its
 # argument(s), {__opt} and {__optarg} respectively. From call to call, those expose
@@ -98,13 +98,13 @@ __shrt_rgxp="^([[:alnum:]]+:{0,2})+$"
 # potential argument(s) are accumulated. Both are then emptied for the parser to
 # return 0.
 #
-# When argp_parse run out of input, it will iterate over each accumulated option
+# When opt_parse run out of input, it will iterate over each accumulated option
 # code in ${__acc_opts} and will repeatedly set {__opt} to the concatenation of '@'
 # and that option code. It will, as well, set {__optarg} to the string holding the
 # mapped option arguments accumulated so far.
 # By default, the long option matching is case-sensitive but this behaviour can be
 # configured within the use of the /case-insensitive switch.
-# If all vector elements have been scanned or when argp_parse hits the word '--', it
+# If all vector elements have been scanned or when opt_parse hits the word '--', it
 # will return 1, which will end the whole option scanning.
 __optindex=0
 __optwrd=
@@ -129,19 +129,19 @@ __parsing_strategy_rgxp="^PERMUTE|RETURN_IN_ORDER|REQUIRE_ORDER$"
 _parsing_strategy="PERMUTE"
 __nonopt_argv=
 #
-# When argp_parse encounters and reports to stderr an illegal or ambiguous option,
+# When opt_parse encounters and reports to stderr an illegal or ambiguous option,
 # it sets {__opt} to '?' and {__optarg} to the empty string.
 # However, if ${_exit_on_error} is false, no error is reported and {__optarg} is set
 # to the faulty option.
-# If argp_parse encounters and reports a missing/superfluous option argument or
+# If opt_parse encounters and reports a missing/superfluous option argument or
 # an option argument that is not of the expected type, it sets {__opt} to '?' and
 # {__optarg} to the empty string. If ${_exit_on_error} is false, no error is reported:
 # {__opt} is set to ':' and {__optarg} is set to the faulty option.
-# When a required option is reported as absent from the command line, argp_parse sets
+# When a required option is reported as absent from the command line, opt_parse sets
 # {_opt} to '?' and {__optarg} to the empty string. If ${_exit_on_error} is false, no
 # error is reported: {__opt} is set to ',' and {__optarg} is set to the first missing
 # required option (and repeatedly for each missing required option).
-# When argp_parse reports two conflicting options, it sets {__opt} to '?' and {__optarg}
+# When opt_parse reports two conflicting options, it sets {__opt} to '?' and {__optarg}
 # to the empty string. Similarly, if ${_exit_on_error} is false, no error is reported:
 # {__opt} is set to '^' and {__optarg} is set to '<opt_a>/<opt_b>' where <opt_a>/<opt_b>
 # denotes the conflicting option pair.
@@ -201,7 +201,7 @@ __err_conflicting_option="option/option code \`%s' conflicts with option \`%s'"
 __err_required_option_not_invoked="required option \`%s' was not invoked"
 __err_invalid_option_argument_type="option \`%s' expects type \`%s' for argument \`%s'"
 __err_invalid_parsing_stragegy="invalid parsing strategy \`%s'"
-__err_missing_option_switch="missing required switch /options=<...>, see argp_parse_help for help"
+__err_missing_option_switch="missing required switch /options=<...>, see opt_parse_help for help"
 __err_invalid_callback_option_prefix="invalid /callback-option-prefix argument, expecting a non-empty value"
 __err_invalid_argument_separator="invalid /argument-separator symbol, expecting a single character symbol"
 __err_required_and_exclusive_option_definition="options \`%s,%s' can't be required and mutually exclusive as well"
@@ -433,7 +433,7 @@ EOF
 }
 # Brief
 # Routine for parsing short options.
-argp_parse_short() {
+opt_parse_short() {
     local parse_as_long="$1" opt_code="${__optwrd%"${__optwrd#?}"}" opt_context
     shift
     decode opt_context "$parse_as_long" "${1%%=*}" "-${opt_code}"
@@ -589,13 +589,13 @@ argp_pre_parse() {
                          if [ ${#} -ge 2 -a "${2##-*}" -a ! "${2##*=*}" ]
                          then
                             warg="$2"; shift 2
-                            argp_parse_long "--${warg}" "$@"
+                            opt_parse_long "--${warg}" "$@"
                             return 2
                          fi
                       elif [ "${1##-W-*}" -a ! "${1##*=*}" ]
                       then
                          warg="${1#-W}"; shift
-                         argp_parse_long "--${warg}" "$@"
+                         opt_parse_long "--${warg}" "$@"
                          return 1
                       fi
                    fi ;;
@@ -620,7 +620,7 @@ argp_pre_parse() {
 }
 # Brief
 # Routine for parsing long options.
-argp_parse_long() {
+opt_parse_long() {
    local opt_code
    opt_code="$(get_long_option_code "${1%%=*}")"
    case "$?" in
@@ -679,19 +679,19 @@ argp_parse_long() {
 # Routine for parsing long/short options. The current behaviour is to
 # fallback to the short options parsing routine if no error is raised
 # during the initial long pass.
-argp_parse_internal() {
+opt_parse_internal() {
     local parse_as_long r
     argp_pre_parse parse_as_long "$@" || return
     #
     if ${parse_as_long}; then
-       argp_parse_long "$@"
+       opt_parse_long "$@"
        r="$?"
        if [ ${r} -lt 5 ]; then
           return ${r}
        fi
     fi
     #
-    argp_parse_short "$parse_as_long" "$@"
+    opt_parse_short "$parse_as_long" "$@"
 }
 # Brief
 # Read parser configuration once.
@@ -1033,7 +1033,7 @@ map_exclusive_options_pair() {
 # Brief
 # Set the index ($1) of the positional parameter from which the parsing
 # is to be done.
-argp_parse_set_index() {
+opt_parse_set_index() {
     __optindex="$1"
     eval "${_callback_opt}index=${1}"
 }
@@ -1050,7 +1050,7 @@ get_option_arguments() {
 # Brief
 # Parse incremental options with their arguments and set the callback
 # state.
-argp_parse_incremental_options() {
+opt_parse_incremental_options() {
     if [ "$__acc_opts" ]; then
        set_callback_option_and_argument "@${__acc_opts%%:*}" "$(get_option_arguments "${__acc_opts%%:*}")"
        remove_entry_from_accumulated_options_if_necessary "${__acc_opts%%:*}"
@@ -1061,7 +1061,7 @@ argp_parse_incremental_options() {
 # Brief
 # Parse required/accumulated options with their arguments and set the
 # callback state.
-argp_parse_accumulated_options() {
+opt_parse_accumulated_options() {
     if [ "$_req_opts" ]; then
        if ${_exit_on_error}; then
            syserr  "$__err_required_option_not_invoked" "$(get_readable_option_name "${_req_opts%%,*}")"
@@ -1072,12 +1072,12 @@ argp_parse_accumulated_options() {
            return 0
        fi
     else
-       argp_parse_incremental_options
+       opt_parse_incremental_options
     fi
 }
 # Brief
 # Internal stateful parsing routine.
-__argp_parse() {
+__opt_parse() {
     local r="$E_END_OF_PARSING"
     if [ ${__optindex} -eq 0 ]; then
        __optindex=1
@@ -1100,13 +1100,13 @@ __argp_parse() {
     #
     shift $((${__optindex} + ${__noptindex} - 1))
     if [ ${#} -ne 0 ]; then
-       argp_parse_internal "$@"
+       opt_parse_internal "$@"
        r="$?"
     fi
-    argp_parse_set_index $((${__optindex} + ${r} % ${E_END_OF_PARSING}))
+    opt_parse_set_index $((${__optindex} + ${r} % ${E_END_OF_PARSING}))
     #
     if [ ${r} -ge ${E_END_OF_PARSING} ]; then
-       argp_parse_accumulated_options
+       opt_parse_accumulated_options
        return
     fi
     #
@@ -1116,8 +1116,8 @@ __argp_parse() {
 }
 # Brief
 # Reset the parser state internally.
-__argp_parse_reset() {
-    argp_parse_set_index 0
+__opt_parse_reset() {
+    opt_parse_set_index 0
 }
 # Brief
 # Build a readable option argument description.
@@ -1191,7 +1191,7 @@ __end_main_opts" IFS="
 }
 # Brief
 # Print a description of the available short/long options.
-__argp_parse_opts_help() {
+__opt_parse_opts_help() {
     local token opt_code aliases arg_flag arg_type desc unread IFS="
 "
     local fmt="$(get_help_output_format short long argument description)\n"

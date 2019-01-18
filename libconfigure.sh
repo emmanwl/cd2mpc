@@ -19,7 +19,7 @@
 LIBCONFIGURE_VERSION=1.0
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libopt4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -406,7 +406,7 @@ makefile() {
 # */
 parse_options() {
     local argv
-    while __argp_parse /options="$(options_set)" /trim-option-arguments-to-uniqueness /callback-option-prefix=_opt /required-options="r,I,i" "$@"
+    while __opt_parse /options="$(options_set)" /trim-option-arguments-to-uniqueness /callback-option-prefix=_opt /required-options="r,I,i" "$@"
     do
         case "$_opt" in
                     r) __accumulate_once "RESOURCES_DIR=$(realpath "$_optarg")" argv             ;;
@@ -417,7 +417,7 @@ parse_options() {
                     s) __accumulate_once "__${_optarg%%=*}__=${_optarg#*=}" argv                 ;;
                     m) __accumulate_once "MAN_PAGE_DIR=${_optarg}" argv                          ;;
                   \@D) __accumulate_once "$_optarg" argv                                         ;;
-                    h) __argp_parse_opts_help
+                    h) __opt_parse_opts_help
                        return ${E_END_OF_PARSING}                                                ;;
                     v) print_version
                        return ${E_END_OF_PARSING}                                                ;;
@@ -430,7 +430,7 @@ parse_options() {
 # * @param ${@} the whole argument vector
 # * @return ${E_SUCCESS} if called with a terminal option (-h, -v or alternatively --help, --version) or if the makefile was properly generated, else ${E_FAILURE}
 # */
-__generate_makefile () {
+__configure () {
     local argv r
     argv="$(parse_options "$@")"
     if [ ${r:=${?}} -eq ${E_END_OF_PARSING} ]; then

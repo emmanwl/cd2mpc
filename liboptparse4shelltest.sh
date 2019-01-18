@@ -15,11 +15,11 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libopt4shelltest, a test suite for the libopt4shell API.
+#@(#) This is liboptparse4shelltest, a test suite for the liboptparse4shell API.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libtest4shell.sh"
-__import_resource_or_fail "<__lib_dir__>/libopt4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/libruntest.sh"
+__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
 __import_resource_or_fail "<__lib_dir__>/liblog4shell.sh" --file-appender=/dev/null
 
 # Shell name
@@ -106,15 +106,15 @@ options_set() {
     printf "%s" "$options"
 }
 #
-run_argp_parse() {
+run_opt_parse() {
     __call_function_a_certain_number_of_times /long-only \
-	                                      /function="__argp_parse" \
+	                                      /function="__opt_parse" \
                                               /run-once \
                                               /callback-option-prefix=_test "$@" 2>&1
 }
-run_argp_parse_repeatedly() {
+run_opt_parse_repeatedly() {
     __call_function_a_certain_number_of_times /long-only \
-                                              /function="__argp_parse" \
+                                              /function="__opt_parse" \
                                               /callback-option-prefix=_test "$@" 2>&1
 }
 # Brief
@@ -122,11 +122,11 @@ run_argp_parse_repeatedly() {
 should_report_the_following() {
     local test_name="should_report_${1}" test_data="$2" error_message="$3"
     local expected="$(printf "$error_message" "${test_data%%,*}")" stdout
-    stdout="$(run_argp_parse_repeatedly "/options=${test_data#*,}")"
+    stdout="$(run_opt_parse_repeatedly "/options=${test_data#*,}")"
     if [ ! "${stdout%%*"${expected}"}" -a ${?} -eq ${E_BAD_ARGS} ]; then
-       logger_unconditionally "test ${test_name} succeeds"
+       __logger_unconditionally "test ${test_name} succeeds"
     else
-       logger_error "test ${test_name} failed: expecting the test to report \`${expected}' but actual/error was \`${stdout}'"
+       __logger_error "test ${test_name} failed: expecting the test to report \`${expected}' but actual/error was \`${stdout}'"
        return ${E_FAILURE}
     fi
 }
@@ -145,16 +145,16 @@ should_build_optstring_accordingly_test() {
     local test_name=should_build_optstring_accordingly
     local expected="um:Xs:d:t:f:c:D:Vvh"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)"
               if [ "$__optstring" != "$expected" ]; then
                  echo "$__optstring"
                  return ${E_FAILURE}
               fi)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the short option string to be \`${expected}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the short option string to be \`${expected}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -163,29 +163,29 @@ should_report_illegal_options_test() {
     local test_name=should_report_illegal_options
     local expected="$(printf "$__err_unrecognized_option" "-z")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" -z)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" -z)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} (short) succeeds"
+             __logger_unconditionally "test ${test_name} (short) succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       *) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
+       *) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
           return ${E_FAILURE} ;;
     esac
     #
     expected="$(printf "$__err_unrecognized_option" "--random")"
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" --random)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" --random)"
     r="$?"
     case "$r" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} (long) succeeds"
+             __logger_unconditionally "test ${test_name} (long) succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       *) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
+       *) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
           return ${E_FAILURE} ;;
     esac
 }
@@ -194,15 +194,15 @@ should_report_missing_option_argument_test() {
     local test_name=should_report_missing_option_argument
     local expected="$(printf "$__err_required_option_argument" "-m")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" -m)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" -m)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       *) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
+       *) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
           return ${E_FAILURE} ;;
     esac
 }
@@ -211,15 +211,15 @@ should_report_conflicting_options_test() {
     local test_name=should_report_conflicting_options
     local expected="$(printf "$__err_conflicting_option" "-d" "-f")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /exclusive-options="d,f" -d /d/a -f /t/f)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /exclusive-options="d,f" -d /d/a -f /t/f)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       *) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
+       *) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
           return ${E_FAILURE} ;;
      esac
 }
@@ -227,14 +227,14 @@ should_report_conflicting_options_test() {
 should_report_required_options_declared_as_exclusive_from_one_another_test() {
     local test_name=should_report_required_options_declared_as_exclusive_from_one_another
     local r stdout expected="$(printf "$__err_required_and_exclusive_option_definition" "-f" "-d")"
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /exclusive-options="t,d,f" /required-options="f,d" -d /d/a)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /exclusive-options="t,d,f" /required-options="f,d" -d /d/a)"
     case "${r:="${?}"}" in
-       0) logger_error "test ${test_name} failed: expecting the exit code to be a non zero value"
+       0) __logger_error "test ${test_name} failed: expecting the exit code to be a non zero value"
           return ${E_FAILURE} ;;
        *) if [ ! "${stdout%%*"${expected}"}" -a ${r} -eq ${E_BAD_ARGS} ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the exit code to be \`${E_BAD_ARGS}' and the error string to be \`${expected}' but actual was \`${r}' and \`${stdout}' respectively"
+             __logger_error "test ${test_name} failed: expecting the exit code to be \`${E_BAD_ARGS}' and the error string to be \`${expected}' but actual was \`${r}' and \`${stdout}' respectively"
              return ${E_FAILURE}
           fi ;;
      esac
@@ -244,15 +244,15 @@ should_parse_required_options_test() {
     local test_name=should_parse_required_options
     local expected="$(printf "$__err_required_option_not_invoked" "-f")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /required-options="f" -d /d/a)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /required-options="f" -d /d/a)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       *) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
+       *) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual/error was \`${r}': ${stdout}"
           return ${E_FAILURE} ;;
     esac
 }
@@ -262,7 +262,7 @@ should_parse_incremental_options_test() {
     local expected_arguments="/d/a,/d/b,/d/c"
     local expected_option_code="@f"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" -f /d/a -f /d/b -f /d/c
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" -f /d/a -f /d/b -f /d/c
               case "$_test" in
                  @f) echo "$_testarg" ;;
                   *) echo "$_test"
@@ -270,14 +270,14 @@ should_parse_incremental_options_test() {
               esac)"
     case "$?" in
        0) if [ "$stdout" = "$expected_arguments" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       1) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
  }
@@ -287,7 +287,7 @@ should_parse_multiple_option_arguments_test() {
     local expected_arguments="/d/a#/d/b#/d/c#/d/d"
     local expected_option_code="@f"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /argument-separator="#" -f "/d/a" -f "/d/b" -f "/d/c" -f "/d/d"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /argument-separator="#" -f "/d/a" -f "/d/b" -f "/d/c" -f "/d/d"
               case "$_test" in
                  @f) echo "$_testarg" ;;
                   *) echo "$_test"
@@ -295,14 +295,14 @@ should_parse_multiple_option_arguments_test() {
               esac)"
     case "$?" in
        0) if [ "$stdout" = "$expected_arguments" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       1) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE};;
     esac
 }
@@ -311,29 +311,29 @@ should_parse_negatable_options_test() {
     local test_name=should_parse_negatable_options
     local expected_option_code="!V"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" --no-verbose
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" --no-verbose
               if [ "$_test" != "$expected_option_code" ]; then
                  echo "$_test"
                  return ${E_FAILURE}
               fi)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} (first form) succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} (first form) succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name} (first form): \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name} (first form): \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
     #
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" --noverbose
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" --noverbose
               if [ "$_test" != "$expected_option_code" ]; then
                  echo "$_test"
                  return ${E_FAILURE}
               fi)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} (second form) succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} (second form) succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name} (second form): \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name} (second form): \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -343,7 +343,7 @@ should_parse_options_performing_case_insensitive_comparison_test() {
     local expected_option_code="s"
     local expected_argument="/d/a"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /case-insensitive --SeLeCtIoN /d/a
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /case-insensitive --SeLeCtIoN /d/a
               case "$_test" in
                  s) if [ "$_testarg" != "$expected_argument" ]; then
                        echo "$_testarg"
@@ -353,12 +353,12 @@ should_parse_options_performing_case_insensitive_comparison_test() {
                     return 2 ;;
               esac)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       2) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -368,7 +368,7 @@ should_report_abbreviated_options_test() {
     local expected_option_code="s"
     local expected_argument="/d/a"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /case-insensitive -sel=/d/a
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /case-insensitive -sel=/d/a
               case "$_test" in
                  s) if [ "$_testarg" != "$expected_argument" ]; then
                        echo "$_testarg"
@@ -378,12 +378,12 @@ should_report_abbreviated_options_test() {
                     return 2 ;;
               esac)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       2) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -393,7 +393,7 @@ should_parse_posix_long_options_test() {
     local expected_option_code="d"
     local expected_argument="/d/a"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /allow-posix-long-option -W device=/d/a
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /allow-posix-long-option -W device=/d/a
               case "$_test" in
                  d) if [ "$_testarg" != "$expected_argument" ]; then
                        echo "$_testarg"
@@ -403,12 +403,12 @@ should_parse_posix_long_options_test() {
                     return 2 ;;
               esac)"
     case "$?" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_argument}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       2) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -419,7 +419,7 @@ should_parse_multiple_posix_long_options_test() {
     local expected_arguments="/d/a /tmp, 1 or 1-3"
     local expected_index="23"
     local stdout
-    stdout="$(while run_argp_parse /case-insensitive /parsing-strategy="RETURN_IN_ORDER" /do-not-exit-on-error /options="$(options_set)" /allow-posix-long-option -Wdevice=/d/a -W template=/tmp first second -W selection=1 third -Wselection=1 first -Wsele=1 -W templ=/tmp -X -VVVV first -u -W sElE=1 first -W S=1; do
+    stdout="$(while run_opt_parse /case-insensitive /parsing-strategy="RETURN_IN_ORDER" /do-not-exit-on-error /options="$(options_set)" /allow-posix-long-option -Wdevice=/d/a -W template=/tmp first second -W selection=1 third -Wselection=1 first -Wsele=1 -W templ=/tmp -X -VVVV first -u -W sElE=1 first -W S=1; do
                     case "$_test" in
                 X|u|V|1) ;;
                       d) if [ "${_testarg##/d/a*}" ]; then
@@ -441,16 +441,16 @@ should_parse_multiple_posix_long_options_test() {
               echo "$_testindex")"
     case "$?" in
        0) if [ ${stdout} -eq ${expected_index} ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the option index to be \`${expected_index}' but actual was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the option index to be \`${expected_index}' but actual was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       1) logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_arguments}' but actual was \`${stdout}'"
+       1) __logger_error "test ${test_name} failed: expecting the callback option argument to be \`${expected_arguments}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_codes}' but actual was \`${stdout}'"
+       2) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_codes}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -459,17 +459,17 @@ should_report_ambiguous_options_test() {
     local test_name=should_report_ambiguous_options
     local expected="$(printf "$__err_ambiguous_option" "--ver")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" --ver)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" --ver)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       0) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
+       0) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -480,7 +480,7 @@ should_permute_non_option_arguments_test() {
     local expected_index="8"
     local r stdout
     stdout="$(local s
-              run_argp_parse_repeatedly /options="$(options_set)" /parsing-strategy="PERMUTE" -u first second -d /d/a third -- four
+              run_opt_parse_repeatedly /options="$(options_set)" /parsing-strategy="PERMUTE" -u first second -d /d/a third -- four
               case "${s:="${?}"}" in
                  1) if [ "${__nonopt_argv}/${_testindex}" != "${expected_arguments}/${expected_index}" ]; then
                        echo "${__nonopt_argv}/${_testindex}"
@@ -490,12 +490,12 @@ should_permute_non_option_arguments_test() {
                     return 2 ;;
               esac)"
     case "${r:="${?}"}" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the non-option arguments/current option index to be \`${expected_arguments}/${expected_index}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the non-option arguments/current option index to be \`${expected_arguments}/${expected_index}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
+       2) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -505,7 +505,7 @@ should_return_non_option_arguments_in_order_test() {
     local expected_arguments="first second third"
     local r stdout
     stdout="$(local arg args s
-              while run_argp_parse /options="$(options_set)" /parsing-strategy="RETURN_IN_ORDER" -u first second -d /d/a third -- four; do
+              while run_opt_parse /options="$(options_set)" /parsing-strategy="RETURN_IN_ORDER" -u first second -d /d/a third -- four; do
                     case "$_test" in
                       1) if [ "$args" ]; then
                             args="${args} ${_testarg}"
@@ -521,12 +521,12 @@ should_return_non_option_arguments_in_order_test() {
                  return ${E_FAILURE}
               fi)"
     case "${r:="${?}"}" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the non-option arguments to be \`${expected_arguments}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the non-option arguments to be \`${expected_arguments}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
+       2) __logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -537,7 +537,7 @@ should_stop_parsing_non_option_arguments_when_requiring_order_test() {
     local expected_index="2"
     local r stdout
     stdout="$(local arg args s
-              run_argp_parse_repeatedly /options="$(options_set)" /parsing-strategy="REQUIRE_ORDER" -u first second -d /d/a third -- four
+              run_opt_parse_repeatedly /options="$(options_set)" /parsing-strategy="REQUIRE_ORDER" -u first second -d /d/a third -- four
               case "$_test" in
                  u) if [ ${_testindex} -ne ${expected_index} ]; then
                        echo "$_testindex"
@@ -546,12 +546,12 @@ should_stop_parsing_non_option_arguments_when_requiring_order_test() {
                  *) return 2 ;;
               esac)"
     case "${r:="${?}"}" in
-       0) logger_unconditionally "test ${test_name} succeeds" ;;
-       1) logger_error "test ${test_name} failed: expecting the option parsing index to be \`${expected_index}' but actual was \`${stdout}'"
+       0) __logger_unconditionally "test ${test_name} succeeds" ;;
+       1) __logger_error "test ${test_name} failed: expecting the option parsing index to be \`${expected_index}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       2) logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
+       2) __logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -560,17 +560,17 @@ should_report_invalid_regular_option_argument_type_test() {
     local test_name=should_report_invalid_regular_option_argument_type
     local expected="$(printf "$__err_invalid_option_argument_type" "-m" "integer" "string")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /argument-separator="%" -m123 -m string)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /argument-separator="%" -m123 -m string)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       0) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
+       0) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -579,17 +579,17 @@ should_report_invalid_key_value_option_argument_type_test() {
     local test_name=should_report_invalid_key_value_option_argument_type
     local expected="$(printf "$__err_invalid_option_argument_type" "-c" "key-value-path" "key=value")"
     local r stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /argument-separator="%" -c key=value)"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /argument-separator="%" -c key=value)"
     case "${r:="${?}"}" in
        1) if [ ! "${stdout%%*"${expected}"}" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the error string to contain \`${expected}' but actual error string was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       0) logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
+       0) __logger_error "test ${test_name} failed: expecting the exit code to be \`1' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -598,7 +598,7 @@ should_parse_mixed_long_and_short_options_test() {
     local test_name=should_parse_mixed_long_and_short_options
     local expected_index="37"
     local r stdout
-    stdout="$(while run_argp_parse /options="$(options_set)" /argument-separator="%" /parsing-strategy="RETURN_IN_ORDER" -u first -X -d /d/a first -max 12 -t ~ first -m78 -u first -X -d /d/a first -max 34 -t ~ first -m78 -u first -X -d /d/a first -max 56 -t ~ first -m78; do
+    stdout="$(while run_opt_parse /options="$(options_set)" /argument-separator="%" /parsing-strategy="RETURN_IN_ORDER" -u first -X -d /d/a first -max 12 -t ~ first -m78 -u first -X -d /d/a first -max 34 -t ~ first -m78 -u first -X -d /d/a first -max 56 -t ~ first -m78; do
                     case "$_test" in
                     u|X) ;;
                       1) if [ "${_testarg##first*}" ]; then
@@ -621,14 +621,14 @@ should_parse_mixed_long_and_short_options_test() {
               echo "$_testindex")"
     case "${r:="${?}"}" in
        0) if [ ${stdout} -eq ${expected_index} ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting the option index to be \`${expected_index}' but actual was \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting the option index to be \`${expected_index}' but actual was \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       1) logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
+       1) __logger_error "test ${test_name} failed: expecting the exit code to be \`0' but actual was \`${r}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE} ;;
     esac
 }
@@ -638,7 +638,7 @@ should_parse_multiple_key_value_option_arguments_test() {
     local expected_arguments="key1=/d/a#/d/b key2=1#2"
     local expected_option_code="@D"
     local stdout
-    stdout="$(run_argp_parse_repeatedly /options="$(options_set)" /argument-separator="#" -D "key1=/d/a" -D "key2=1" -D "key1=/d/b" -D "key2=2"
+    stdout="$(run_opt_parse_repeatedly /options="$(options_set)" /argument-separator="#" -D "key1=/d/a" -D "key2=1" -D "key1=/d/b" -D "key2=2"
               case "$_test" in
                  @D) echo "$_testarg" ;;
                   *) echo "$_test"
@@ -646,16 +646,16 @@ should_parse_multiple_key_value_option_arguments_test() {
               esac)"
     case "$?" in
        0) if [ "$stdout" = "$expected_arguments" ]; then
-             logger_unconditionally "test ${test_name} succeeds"
+             __logger_unconditionally "test ${test_name} succeeds"
           else
-             logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
+             __logger_error "test ${test_name} failed: expecting to get \`${expected_arguments}' but got \`${stdout}'"
              return ${E_FAILURE}
           fi ;;
-       1) logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
+       1) __logger_error "test ${test_name} failed: expecting the returned option code to be \`${expected_option_code}' but actual was \`${stdout}'"
           return ${E_FAILURE} ;;
-       *) logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
+       *) __logger_error "${test_name}: \`${stdout#*[[:space:]]}'"
           return ${E_FAILURE};;
     esac
 }
 
-__run_test_suite_randomly "libopt4shelltest.sh"
+__run_test_suite "liboptparse4shelltest.sh"
