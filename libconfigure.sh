@@ -15,7 +15,7 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libconfigure, a makefile generator tool.
+#@(#) This is libconfigure, a makefile generator lib.
 LIBCONFIGURE_VERSION=1.0
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}

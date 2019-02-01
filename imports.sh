@@ -22,7 +22,7 @@ __import_resource() {
 # not found.
 __import_resource_or_fail() {
    if ! __import_resource "$@"; then
-      printf "Import failed: missing required dependency ${resource##*/} in ${resource%/*}, exiting.\n" >&2
+      printf "Import failed: missing required dependency ${1##*/} in ${1%/*}, exiting.\n" >&2
       exit ${E_FAILURE}
    fi
    return ${E_SUCCESS}

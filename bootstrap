@@ -15,40 +15,40 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This produces a makefile to build/test/install the bootstraped distribution.
+#@(#) This produces a makefile to build/test/install the parameterized distribution.
 
 search_for_imported_resources() {
     perl -ne "print if s#[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"{0,1}(?:<__.*__>/)([^\"]+)\"{0,1}.*#\1#g" "$1"
 }
 
 load_resource_recursively() {
-    local working_directory="$1" perl_replace_expression="$2" resource
+    local bootstrap_directory="$1" perl_replace_expression="$2" resource
     shift 2
     if [ ! -e "$1" ]; then
        printf "Could not find resolve resource ${1}, exiting\n" >&2
        return 1
     fi
     for resource in $(search_for_imported_resources "$1"); do
-        load_resource_recursively "$working_directory" "$perl_replace_expression" "$resource"
+        load_resource_recursively "$bootstrap_directory" "$perl_replace_expression" "$resource"
     done
-    if [ ! -e "${working_directory}/${1}" ]; then
-       perl -pe "$perl_replace_expression" "$1" > "${working_directory}/${1}"
-       if [ -s "${working_directory}/${1}" ]; then
-          . "${working_directory}/${1}"
+    if [ ! -e "${bootstrap_directory}/${1}" ]; then
+       perl -pe "$perl_replace_expression" "$1" > "${bootstrap_directory}/${1}"
+       if [ -s "${bootstrap_directory}/${1}" ]; then
+          . "${bootstrap_directory}/${1}"
        fi
     fi
 }
 
 goal_perl_replace_expression() {
-    local working_directory="$1" expression
+    local bootstrap_directory="$1" expression
     shift 
     while [ ${#} -gt 0 ]; do
         case "$1" in
            __*__=*) if [ ! "${1##*=*}" ]; then
                        if [ "$expression" ]; then
-                          expression="${expression};s#<${1%%=*}>#${working_directory}#g"
+                          expression="${expression};s#<${1%%=*}>#${bootstrap_directory}#g"
                        else
-                          expression="s#<${1%%=*}>#${working_directory}#g"
+                          expression="s#<${1%%=*}>#${bootstrap_directory}#g"
                        fi
                     fi ;;
         esac
@@ -58,16 +58,16 @@ goal_perl_replace_expression() {
 }
 
 makefile_perl_replace_expression() {
-    local working_directory="$1" expression arg
+    local bootstrap_directory="$1" expression arg
     shift 
     while [ ${#} -gt 0 ]; do
         case "$1" in
            --search-replace|-s) if [ ${#} -ge 2 ]; then
                                    if [ ! "${2##*=*}" -a "${2%%=*}" ]; then
                                       if [ "$expression" ]; then
-                                         expression="${expression};s#<__${2%%=*}__>#${working_directory}#g"
+                                         expression="${expression};s#<__${2%%=*}__>#${bootstrap_directory}#g"
                                       else
-                                         expression="s#<__${2%%=*}__>#${working_directory}#g"
+                                         expression="s#<__${2%%=*}__>#${bootstrap_directory}#g"
                                       fi
                                    fi
                                    shift
@@ -75,17 +75,17 @@ makefile_perl_replace_expression() {
             --search-replace=*) arg="${1#*=}"
                                 if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
                                    if [ "$expression" ]; then
-                                      expression="${expression};s#<__${arg%%=*}__>#${working_directory}#g"
+                                      expression="${expression};s#<__${arg%%=*}__>#${bootstrap_directory}#g"
                                    else
-                                      expression="s#<__${arg%%=*}__>#${working_directory}#g"
+                                      expression="s#<__${arg%%=*}__>#${bootstrap_directory}#g"
                                    fi
                                 fi ;;
                            -s*) arg="${1#-s}"
                                 if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
                                    if [ "$expression" ]; then
-                                      expression="${expression};s#<__${arg%%=*}__>#${working_directory}#g"
+                                      expression="${expression};s#<__${arg%%=*}__>#${bootstrap_directory}#g"
                                    else
-                                      expression="s#<__${arg%%=*}__>#${working_directory}#g"
+                                      expression="s#<__${arg%%=*}__>#${bootstrap_directory}#g"
                                    fi
                                 fi ;;
         esac
@@ -95,17 +95,17 @@ makefile_perl_replace_expression() {
 }
 
 bootstrap_libconfigure() {
-    local working_directory="$1"
-    local perl_replace_expression="$(goal_perl_replace_expression "$working_directory" "$@")"
-    load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
+    local bootstrap_directory="$1"
+    local perl_replace_expression="$(goal_perl_replace_expression "$bootstrap_directory" "$@")"
+    load_resource_recursively "$bootstrap_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
 }
 
 __bootstrap() {
-    local working_directory="${TMPDIR:-/tmp}/$(basename "$0")."$$
-    mkdir -p "$working_directory"
-    local perl_replace_expression="$(makefile_perl_replace_expression "$working_directory" "$@")"
-    load_resource_recursively "$working_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
+    local bootstrap_directory="${TMPDIR:-/tmp}/$(basename "$0")."$$
+    mkdir -p "$bootstrap_directory"
+    local perl_replace_expression="$(makefile_perl_replace_expression "$bootstrap_directory" "$@")"
+    load_resource_recursively "$bootstrap_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
     __configure "$@" --define WORKING_DIR="${TMPDIR:-/tmp}/configure.target"
-    rm -rf "$working_directory"
+    rm -rf "$bootstrap_directory"
 }
 
