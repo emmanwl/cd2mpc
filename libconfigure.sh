@@ -19,7 +19,7 @@
 LIBCONFIGURE_VERSION=1.0
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/liboptparse.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -53,10 +53,9 @@ cat <<version >&2
 This is ${__shell#\./} v${LIBCONFIGURE_VERSION}, a command-line tool that automates test/install/check/document
 tasks for Shell projects.
 
-The tool aims at testing and installing Shell projects in a centralized way: it parses any flat collection
-of scripts (*.sh) or configuration files (*rc), in the <resources-directory>, which do reference parametrized
-content to be valorized with the user input. It produces, at time of invocation, a makefile whose goals
-match those predefined test/install/check/document tasks.
+The tool aims at testing/deploying Shell projects in a centralized way: it parses any flat collection of scripts
+(*.sh) or configuration files (*rc) referencing parametrized paths to be valorized at configuration time.
+When invoked, a makefile whose goals match those predefined test/install/check/document tasks is produced.
 
 These resources are filtered so patterns like '<__KEY__>' are replaced with values communicated within the
 --search-replace KEY=<VALUE> switch. '*rc' resources can be marked as dot-files within the special switch
@@ -67,10 +66,11 @@ Type ${__shell} -h for configuration options.
 
 Example:
 
-Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh, script.sh.manpage.gz },
+Given { script.sh, scriptrc, libscript1.sh, libscript2.sh, libscript1test.sh, libscript2test.sh, script.sh.manpage.gz },
 the command: ${__shell} --resources-dir=. 
                          --install-dir ${HOME}/bin
                          --test libscript1test.sh
+                         --test libscript2test.sh
                          --install script.sh
                          --dot-file scriptrc=${HOME}
                          --man-page-dir ${HOME}/.local/share/man
@@ -87,11 +87,11 @@ would generate a makefile from which:
 
 - 'make check' would span a new shell to run shellcheck on script.sh in a best-effort mode
 
-- 'make test' would spawn a new shell to run libscript1test.sh
+- 'make test' would spawn a new shell to run libscript1test.sh and libscript2test.sh
 
 - 'make doc' would deploy script man page (script.sh.manpage.gz) to the man pages user directory
 
-- 'make clean' would leave the place clean before removing the makefile itself.
+- 'make clean' would wipe out any created temporary resource before removing the makefile itself.
 
 version
 }
@@ -219,7 +219,7 @@ filter_sources() {
         if [ "$f" != "${wrkdir}/install/*" -a "$(basename "$f")" != "libconfigure.sh" ]; then
            k="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "$f" 2>/dev/null | head -n1)"
            if [ "$k" ]; then
-              printf "configure.bootstrap:filter_sources failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --key-value ${k}=<VALUE>\n" >&2
+              printf "configure.bootstrap:filter_sources failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n" >&2
               return ${E_FAILURE}
            fi
         fi
@@ -237,7 +237,7 @@ filter_tests() {
         if [ "$f" != "${wrkdir}/test/*" -a "$(basename "$f")" != "libconfigure.sh" ]; then
            k="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "$f" 2>/dev/null | head -n1)"
            if [ "$k" ]; then
-              printf "configure.bootstrap:filter_tests failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --key-value ${k}=<VALUE>\n" >&2
+              printf "configure.bootstrap:filter_tests failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n" >&2
               return ${E_FAILURE}
            fi
         fi
@@ -251,7 +251,7 @@ filter_tests() {
 # */
 print_imported_resources_paths() {
     local wrkdir="$(get_key_value "WORKING_DIR" "$@")"
-    perl -ne "print if s#^[[:space:]]*__import_resource_or_fail[[:space:]]+\"(.*?)\".*#\1#g" "${wrkdir}/install/"* 2>/dev/null | awk '!commands[$0]++'
+    perl -ne "print if s#^[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"(.*?)\".*#\1#g" "${wrkdir}/install/"* 2>/dev/null | awk '!commands[$0]++'
 }
 # **
 # * Evaluate paths, doing required search/replace patterns operations, before sorting them to uniqueness.
@@ -269,12 +269,16 @@ install() {
     {
      print_imported_resources_paths "$@" | while read resource
      do 
-         echo -m 755 -d "$(dirname ${resource})"
-         echo -m 644 "${wrkdir}/install/$(basename ${resource})" "$resource"
+         if [ -e "${wrkdir}/install/$(basename ${resource})" ]; then
+            echo -m 755 -d "$(dirname ${resource})"
+            echo -m 644 "${wrkdir}/install/$(basename ${resource})" "$resource"
+         fi
      done
      for resource in $(get_key_value "INSTALL" "$@"); do
          echo -m 755 -d "$install_dir"
-         echo -m 755 "${wrkdir}/install/${resource}" "${install_dir}/${resource%\.sh}"
+         if [ -e "$resource" ]; then
+            echo -m 755 "${wrkdir}/install/${resource}" "${install_dir}/${resource%\.sh}"
+	 fi
      done
      #
      local entry file

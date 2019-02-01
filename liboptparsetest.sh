@@ -15,12 +15,12 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is liboptparse4shelltest, a test suite for the liboptparse4shell API.
+#@(#) This is liboptparsetest, a test suite for the liboptparse API.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
 __import_resource_or_fail "<__lib_dir__>/libruntest.sh"
-__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
-__import_resource_or_fail "<__lib_dir__>/liblog4shell.sh" --file-appender=/dev/null
+__import_resource_or_fail "<__lib_dir__>/liboptparse.sh"
+__import_resource_or_fail "<__lib_dir__>/liblogshell.sh" --file-appender=/dev/null
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
@@ -658,4 +658,4 @@ should_parse_multiple_key_value_option_arguments_test() {
     esac
 }
 
-__run_test_suite "liboptparse4shelltest.sh"
+__run_test_suite "liboptparsetest.sh"

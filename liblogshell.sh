@@ -15,10 +15,10 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is liblog4shell, a shell script library inspired by log4j.
+#@(#) This is liblogshell, a shell script library inspired by log4j.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/libcd2mpc.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"

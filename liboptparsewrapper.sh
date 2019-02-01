@@ -15,12 +15,12 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is libop4swrapper, a wrapper for the liboptparse4shell API. It exposes the API entry points
+#@(#) This is liboptparsewrapper, a wrapper for the liboptparse API. It exposes the API entry points
 #@(#) and provides the user with an extra indirection level for extending the default parsing behaviour.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/liboptparse4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/liboptparse.sh"
 
 # Mutators
 __look_for_parsing_extensions=true
@@ -60,7 +60,7 @@ opt_parse_opts_help() {
 opt_parse_help() {
 less <<__help_information
 
-This embeds liboptparse4shell, a shell API for parsing command line parameters.
+This embeds liboptparse, a shell API for parsing command line parameters.
 It handles short/long options and features noticeably: option bundling, option
 abbreviation to uniqueness, option aliasing and argument type checking.
 

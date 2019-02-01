@@ -21,8 +21,9 @@
 CD2MPC_VERSION=15.0
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libop4swrapper.sh"
-__import_resource_or_fail "<__lib_dir__>/liblog4shell.sh" --conf="<__cd2mpcrc__>"
+__import_resource_or_fail "<__lib_dir__>/liboptparsewrapper.sh"
+__import_resource_or_fail "<__lib_dir__>/liblogshell.sh" --conf="<__liblogshellrc__>"
+__import_resource "<__cd2mpcrc__>"
 
 stty -echo 2>/dev/null
 

@@ -15,13 +15,13 @@
 #@(#) OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
 #@(#) EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #@(#)
-#@(#) This is liboptparse4shell, a shell API for parsing command line parameters. It handles short/long
+#@(#) This is liboptparse, a shell API for parsing command line parameters. It handles short/long
 #@(#) options and features option bundling, option abbreviation to uniqueness, option aliasing,
 #@(#) negatable and incremental style of options as well as (option) argument type checking.
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/lib4shell.sh"
+__import_resource_or_fail "<__lib_dir__>/libcd2mpc.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
