@@ -8,10 +8,11 @@ E_BAD_ARGS=65
 E_END_OF_PARSING=127
 E_SIG_INT=128
 # Brief
-# Accumulate tokens (all but last positional
-# parameters) in a list (last parameter).
+# Accumulate all but last positional tokens
+# before assigning the accumulation to the
+# to the last parameter.
 __accumulate() {
-    local name value
+    local name value values
     for name in ${@}; do :; done
     values="$(eval echo '$'"${name}")"
     while [ ${#} -gt 1 ]; do
@@ -23,13 +24,29 @@ __accumulate() {
         values="$(eval echo '$'"${name}")"
         shift
     done
+} 
+# Accumulate tokens as above but use ${1}
+# as the accumulation separator.
+__accumulate_with_separator() {
+    local separator="$1" name value values
+    shift
+    for name in ${@}; do :; done
+    values="$(eval echo '$'"${name}")"
+    while [ ${#} -gt 1 ]; do
+        if [ ! "$values" ]; then
+           eval "${name}='${1}'"
+        else
+           eval "${name}='${values}${separator}${1}'"
+        fi
+        values="$(eval echo '$'"${name}")"
+        shift
+    done
 }
 # Brief
-# Accumulate tokens, like previously, but
-# make sure that each token is added only
-# once.
+# Accumulate tokens as above but make sure
+# that each token is accumulated only once.
 __accumulate_once() {
-    local name value token matched
+    local name value values token matched
     for name in ${@}; do :; done
     values="$(eval echo '$'"${name}")"
     while [ ${#} -gt 1 ]; do
@@ -52,7 +69,7 @@ __accumulate_once() {
     done
 }
 # Brief
-# Remove token ${1} from list ${2}.
+# Remove token ${1} from ${2}.
 __remove() {
     local token="$1" name="$2" value values
     for value in $(eval echo '$'"${name}"); do
@@ -67,8 +84,8 @@ __remove() {
     eval "${name}='${values}'"
 }
 # Brief
-# Split remaining ${@} according IFS (${1})
-# and print them to stdout.
+# Expand all positional parameters but one
+# using ${1} as IFS and print them to stdout.
 __split_tokens_accordingly() {
     local IFS="$1" item
     shift
@@ -77,8 +94,8 @@ __split_tokens_accordingly() {
     done
 }
 # Brief
-# Append ${1} to a ${3}-separated list of
-# tokens ${2} only if ${2} doesnt already
+# Append ${1} to a ${3}-separated accumulation
+# of tokens ${2} only if ${2} doesnt already
 # contain ${1}.
 __append() {
     local token tokens="$2"
@@ -98,18 +115,18 @@ __append() {
 # Left pad ${1} with zeros.
 __pad() { printf "%02i" "${1#0}"; }
 # Brief
-# Check whether the first positional parameter
-# matches the regular expression that follows.
+# Check whether ${1} matches the regular
+# expression that follows.
 __is_of_match() { printf "%s" "$1"|grep -Ew -- "$2" >/dev/null 2>&1; }
 # Brief
-# Check whether the pattern ${1} is contained
-# in the (text) file denoted by ${2}.
+# Check whether the ascii resource denoted
+# by ${2} holds references to pattern ${1}.
 __is_in() { grep -E -- "$1" "$2" >/dev/null 2>&1 ; }
 # Brief
 # Check whether ${1} is contained in ${2}
-# which is a ${3}-separated list.
+# which is a ${3}-separated accumulation.
 __is_1_contained_in_2_using_3_as_separator() {
-    [ "$1" = "$2" ] || [ ! "${2##"${1}${3}"*}" ] || [ ! "${2##*"${3}${1}${3}"*}" ] || [ ! "${2##*"${3}${1}"}" ]
+    [ "$1" = "$2" ] || [ "$2" -a ! "${2##"${1}${3}"*}" ] || [ "$2" -a ! "${2##*"${3}${1}${3}"*}" ] || [ "$2" -a ! "${2##*"${3}${1}"}" ]
 }
 # Brief
 # Check whether ${1} denotes a valid path
@@ -118,8 +135,8 @@ __is_path() { __is_of_match "$1" "^(/+((\.){0,1}[[:alnum:]]+((-|_)*[[:alnum:]]+)
 # Sanitize ${1}.
 __munge() { printf "%s" "$1"|sed -e "s/\/\{1,\}/_/g;s/@/_/g"|tr -d ";?[:cntrl:]"; }
 # Brief
-# Remove leading and trailing ${2} characters
-# from ${1}.
+# Remove, on the fly, all leading and trailing
+# ${2} characters from ${1}.
 __trim_char() {
     local string="$1" char="$2"
     while [ "${string%"${string#?}"}" = "$char" ]; do
@@ -131,13 +148,13 @@ __trim_char() {
     printf "%s" "$string"
 }
 # Brief
-# Remove leading and trailing space characters
-# from ${1}.
+# Remove, on the fly, all leading and trailing
+# space characters from ${1}.
 __trim() {
     __trim_char "$1" " "
 }
 # Brief
-# Remove all space characters.
+# Remove, on the fly, all space characters.
 __trim_globally() {
     local string="$1" left right
     while :; do
@@ -153,7 +170,8 @@ __trim_globally() {
 # Brief
 # Read fields from a ${1}-delimited string ${2}, 
 # starting at position ${3}, and assign content
-# to the remaining positional parameters.
+# (respectively) to the remaining positional
+# parameters.
 __read_separator_delimited_token() {
     local separator="$1" token="$2" index="$3" last
     while [ ${index} -gt 1 ]; do
@@ -168,8 +186,8 @@ EOF
     return ${E_SUCCESS}
 }
 # Brief
-# Replace all hyphens with underscores in the
-# input string.
+# Replace, on the fly, each hyphen contained in
+# ${1} with an underscore.
 __underscorize() {
     local right string="$1" left
     while :; do
@@ -183,7 +201,7 @@ __underscorize() {
     printf "%s" "$string"
 }
 # Brief
-# Put ${1} to lowercase.
+# Print ${1} to lowercase.
 __lowerize() {
     local string="$1" left lower right
     while :; do

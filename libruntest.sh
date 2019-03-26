@@ -18,7 +18,7 @@
 #@(#) This is libruntest, a shell script library for running automated tests.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libcd2mpc.sh"
+__import_resource_or_fail "<__lib_dir__>/libshell.sh"
 __import_resource_or_fail "<__lib_dir__>/liblogshell.sh" --file-appender=/dev/null
 
 # Shell name

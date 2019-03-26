@@ -21,7 +21,7 @@
 #@(#) It's POSIX compliant providing POSIXLY_CORRECT is non-zero.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libcd2mpc.sh"
+__import_resource_or_fail "<__lib_dir__>/libshell.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"

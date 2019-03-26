@@ -17,8 +17,10 @@
 #@(#)
 #@(#) This produces a makefile to build/test/install the parameterized distribution.
 
+. ./libshell.sh
+
 search_for_imported_resources() {
-    perl -ne "print if s#[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"{0,1}(?:<__.*__>/)([^\"]+)\"{0,1}.*#\1#g" "$1"
+    perl -ne "print if s#^[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"{0,1}(?:<__.*__>/)([^\"]+)\"{0,1}.*#\1#g" "$1"
 }
 
 load_resource_recursively() {
@@ -44,14 +46,12 @@ goal_perl_replace_expression() {
     shift 
     while [ ${#} -gt 0 ]; do
         case "$1" in
-           __*__=*) if [ ! "${1##*=*}" ]; then
-                       if [ "$expression" ]; then
-                          expression="${expression};s#<${1%%=*}>#${bootstrap_directory}#g"
-                       else
-                          expression="s#<${1%%=*}>#${bootstrap_directory}#g"
-                       fi
-                    fi ;;
+           __*__=*) arg="$1" ;;
+                 *) arg=     ;;
         esac
+        if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
+           __accumulate_with_separator ";" "s#<${arg%%=*}>#${bootstrap_directory}#g" "expression"
+        fi
         shift
     done
     printf "%s" "$expression"
@@ -63,32 +63,16 @@ makefile_perl_replace_expression() {
     while [ ${#} -gt 0 ]; do
         case "$1" in
            --search-replace|-s) if [ ${#} -ge 2 ]; then
-                                   if [ ! "${2##*=*}" -a "${2%%=*}" ]; then
-                                      if [ "$expression" ]; then
-                                         expression="${expression};s#<__${2%%=*}__>#${bootstrap_directory}#g"
-                                      else
-                                         expression="s#<__${2%%=*}__>#${bootstrap_directory}#g"
-                                      fi
-                                   fi
+                                   arg="$2"
                                    shift
-                                fi ;;
-            --search-replace=*) arg="${1#*=}"
-                                if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
-                                   if [ "$expression" ]; then
-                                      expression="${expression};s#<__${arg%%=*}__>#${bootstrap_directory}#g"
-                                   else
-                                      expression="s#<__${arg%%=*}__>#${bootstrap_directory}#g"
-                                   fi
-                                fi ;;
-                           -s*) arg="${1#-s}"
-                                if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
-                                   if [ "$expression" ]; then
-                                      expression="${expression};s#<__${arg%%=*}__>#${bootstrap_directory}#g"
-                                   else
-                                      expression="s#<__${arg%%=*}__>#${bootstrap_directory}#g"
-                                   fi
-                                fi ;;
+                                fi            ;;
+            --search-replace=*) arg="${1#*=}" ;;
+                           -s*) arg="${1#-s}" ;;
+                             *) arg=          ;;
         esac
+        if [ ! "${arg##*=*}" -a "${arg%%=*}" ]; then
+           __accumulate_with_separator ";" "s#<__${arg%%=*}__>#${bootstrap_directory}#g" "expression"
+        fi
         shift
     done
     printf "%s" "$expression"

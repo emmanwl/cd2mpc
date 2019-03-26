@@ -18,7 +18,7 @@
 #@(#) This is liblogshell, a shell script library inspired by log4j.
 
 . "<__lib_dir__>/imports.sh" || exit ${E_IMPORT_FAILURE:=13}
-__import_resource_or_fail "<__lib_dir__>/libcd2mpc.sh"
+__import_resource_or_fail "<__lib_dir__>/libshell.sh"
 
 # Shell name
 __shell="$(__get_shell_name "$0")"
