@@ -27,7 +27,7 @@ load_resource_recursively() {
     local bootstrap_directory="$1" perl_replace_expression="$2" resource
     shift 2
     if [ ! -e "$1" ]; then
-       printf "Could not find resolve resource ${1}, exiting\n" >&2
+       printf "Could not resolve resource ${1}, exiting\n" >&2
        return 1
     fi
     for resource in $(search_for_imported_resources "$1"); do
@@ -85,11 +85,9 @@ bootstrap_libconfigure() {
 }
 
 __bootstrap() {
-    local bootstrap_directory="${TMPDIR:-/tmp}/$(basename "$0")."$$
-    mkdir -p "$bootstrap_directory"
+    local bootstrap_directory="$(mktemp -d "${TMPDIR:-/tmp}/$(basename "$0").XXXX" 2>/dev/null)"
     local perl_replace_expression="$(makefile_perl_replace_expression "$bootstrap_directory" "$@")"
     load_resource_recursively "$bootstrap_directory" "$perl_replace_expression" "libconfigure.sh" || exit 1
     __configure "$@" --define WORKING_DIR="${TMPDIR:-/tmp}/configure.target"
     rm -rf "$bootstrap_directory"
 }
-

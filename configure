@@ -19,4 +19,11 @@
 
 . "./bootstrap" 2>/dev/null
 
-__bootstrap "$@" --resources-dir="." --install-dir "${HOME}/bin" --dot-file cd2mpcrc="${HOME}" --test liboptparsetest.sh --install cd2mpc.sh --man-page-dir "${HOME}/.local/share/man" --search-replace lib_dir="${HOME}/libs4shell" --search-replace liblogshellrc="${HOME}/libs4shell/liblogshell.rc"
+__bootstrap "$@" --resources-dir="." \
+	         --install-dir "${HOME}/bin" \
+		 --dot-file cd2mpcrc="${HOME}" \
+		 --test liboptparsetest.sh \
+		 --install cd2mpc.sh \
+		 --man-page-dir "${HOME}/.local/share/man" \
+		 --search-replace lib_dir="${HOME}/libs4shell" \
+		 --search-replace liblogshellrc="${HOME}/libs4shell/liblogshell.rc"

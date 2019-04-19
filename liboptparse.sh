@@ -207,22 +207,6 @@ __err_invalid_argument_separator="invalid /argument-separator symbol, expecting 
 __err_required_and_exclusive_option_definition="options \`%s,%s' can't be required and mutually exclusive as well"
 #
 # Brief
-# Print message to stdout/stderr.
-trace() {
-    local format
-    if [ ${#} -ge 1 ]; then
-       format="${__shell}: ${1}\n"
-       shift
-       printf "$format" "$@"
-    fi
-}
-sysout() {
-    trace "$@"
-}
-syserr() {
-    trace "$@" >&2
-}
-# Brief
 # Check whether ($@) hold each item only once.
 has_unique_candidates() {
     local token1 token2
@@ -233,7 +217,7 @@ has_unique_candidates() {
         for token2; do
             token2="$(lowerize_accordingly "$token2")"
             if [ "$token1" = "$token2" ]; then
-               syserr "$__err_not_unique_long_alias" "$token1"
+               __syserr "$__err_not_unique_long_alias" "$token1"
                return 1
             fi
         done
@@ -290,7 +274,7 @@ __end_main_opts"
               return 1
            elif [ "$optstring" ]; then
               if ! __is_of_match "$optstring" "$__shrt_rgxp"; then
-                 syserr "$__err_short_option_syntax" "$optstring"
+                 __syserr "$__err_short_option_syntax" "$optstring"
                  return 1
               else
                  printf "%s" "$optstring"
@@ -298,7 +282,7 @@ __end_main_opts"
            fi
            return 0
         elif ! __is_of_match "$token" "$__long_rgxp"; then
-           syserr "$__err_long_option_syntax" "$token"
+           __syserr "$__err_long_option_syntax" "$token"
            return 1
         fi
         #
@@ -306,7 +290,7 @@ __end_main_opts"
         if [ ! "$short_tokens" ]; then
            short_tokens="$opt_code"
         elif [ ! "${short_tokens##*"${opt_code}"*}" ]; then
-           syserr "$__err_duplicate_option_entry" "$opt_code"
+           __syserr "$__err_duplicate_option_entry" "$opt_code"
            return 1
         else
            short_tokens="${short_tokens} ${opt_code}"
@@ -320,16 +304,16 @@ __end_main_opts"
         fi
         #
         if [ ! "$aliases" -a ${#opt_code} -gt 1 ]; then
-           syserr "$__err_missing_long_alias" "$opt_code"
+           __syserr "$__err_missing_long_alias" "$opt_code"
            return 1
         elif [ "$aliases" -a ! "${aliases%%*!}" ]; then
            if [ ${arg_flag%%@*} -ne 0 ]; then
-              syserr "$__err_negatable_option_definition" "$(get_readable_option_name "$opt_code")"
+              __syserr "$__err_negatable_option_definition" "$(get_readable_option_name "$opt_code")"
               return 1
            fi
         elif [ "$aliases" -a ! "${aliases%%*@}" ]; then
            if [ ${arg_flag%%@*} -ne 1 ]; then
-              syserr "$__err_incremental_option_definition" "$(get_readable_option_name "$opt_code")"
+              __syserr "$__err_incremental_option_definition" "$(get_readable_option_name "$opt_code")"
               return 1
            fi
         fi
@@ -351,7 +335,7 @@ __end_main_opts"
                                   *) arg_type= ;;
         esac
         if [ "$arg_type" ] && ! is_implemented "$arg_type"; then
-           syserr "$__err_missing_type_check_function" "$(__underscorize "$arg_type")"
+           __syserr "$__err_missing_type_check_function" "$(__underscorize "$arg_type")"
            return 1
         fi
     done
@@ -377,7 +361,7 @@ set_erroneous_option_and_argument() {
 #
 alert_whenever() {
     if ${_exit_on_error}; then
-       syserr "$@"
+       __syserr "$@"
     fi
 }
 #
@@ -479,7 +463,7 @@ opt_parse_short() {
        return 1
     else
        set_erroneous_option_and_argument "$__err_code_illegal_opt" "$opt_context"
-       syserr "$__err_unrecognized_option" "$opt_context"
+       __syserr "$__err_unrecognized_option" "$opt_context"
     fi
     return 0
 }
@@ -800,7 +784,7 @@ map_required_versus_exclusive_options() {
            for optb; do
                for conflict in $(__split_tokens_accordingly "," "$conflicts"); do
                    if [ "$conflict" = "$optb" ]; then
-                      syserr "$__err_required_and_exclusive_option_definition" "$(get_readable_option_name "$opta")" "$(get_readable_option_name "$optb")"
+                      __syserr "$__err_required_and_exclusive_option_definition" "$(get_readable_option_name "$opta")" "$(get_readable_option_name "$optb")"
                       return 1
                    fi
                done
@@ -811,15 +795,15 @@ map_required_versus_exclusive_options() {
 #
 configure_parser() {
     if ! __is_of_match "$_parsing_strategy" "$__parsing_strategy_rgxp"; then
-       syserr "$__err_invalid_parsing_stragegy" "$_parsing_strategy"
+       __syserr "$__err_invalid_parsing_stragegy" "$_parsing_strategy"
        return 1
     elif [ ! "$_main_opts" ]; then
-       syserr "$__err_missing_option_switch"
+       __syserr "$__err_missing_option_switch"
        return 1
     elif ! __optstring="$(get_optstring)"; then
        return 1
     elif [ ! "$_callback_opt" ]; then
-       syserr "$__err_invalid_callback_option_prefix"
+       __syserr "$__err_invalid_callback_option_prefix"
        return 1
     elif [ "$_req_opts" ] && ! map_required_options; then
        return 1
@@ -829,10 +813,10 @@ configure_parser() {
     then
        return 1
     elif [ ${#_arg_sep} -gt 1 ]; then
-       syserr "$__err_invalid_argument_separator"
+       __syserr "$__err_invalid_argument_separator"
        return 1
     elif [ ${#_key_value_sep} -gt 1 ]; then
-       syserr "$__err_invalid_argument_separator"
+       __syserr "$__err_invalid_argument_separator"
        return 1
     fi
     decode __err_code_illegal_arg "$_exit_on_error" "?" ":"
@@ -1064,7 +1048,7 @@ opt_parse_incremental_options() {
 opt_parse_accumulated_options() {
     if [ "$_req_opts" ]; then
        if ${_exit_on_error}; then
-           syserr  "$__err_required_option_not_invoked" "$(get_readable_option_name "${_req_opts%%,*}")"
+           __syserr  "$__err_required_option_not_invoked" "$(get_readable_option_name "${_req_opts%%,*}")"
            exit 1
        else
            set_callback_option_and_argument "$__err_code_expected_opt" "${_req_opts%%,*}"

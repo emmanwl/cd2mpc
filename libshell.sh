@@ -8,6 +8,22 @@ E_BAD_ARGS=65
 E_END_OF_PARSING=127
 E_SIG_INT=128
 # Brief
+# Print message to stdout/stderr.
+__trace() {
+    local format
+    if [ ${#} -ge 1 ]; then
+       format="${__shell}: ${1}\n"
+       shift
+       printf "$format" "$@"
+    fi
+}
+__sysout() {
+    __trace "$@"
+}
+__syserr() {
+    __trace "$@" >&2
+}
+# Brief
 # Accumulate all but last positional tokens
 # before assigning the accumulation to the
 # to the last parameter.

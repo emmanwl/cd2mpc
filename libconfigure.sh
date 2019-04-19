@@ -25,7 +25,7 @@ __import_resource_or_fail "<__lib_dir__>/liboptparse.sh"
 __shell="$(__get_shell_name "$0")"
 # **
 # * Implementation for the type interface.
-# * @param ${1} the candidate string to check
+# * @param ${1} the candidate string to type-check
 # */
 is_string() { __is_of_match "$1" "[[:print:]]+"; }
 is_path() { __is_path "$1"; }
@@ -33,7 +33,7 @@ is_real_path() { realpath "$1" >/dev/null 2>&1; }
 # Define options set.
 options_set() {
     local options="r:resources-dir:1@real-path:Specify the directory where to look for *.sh and *rc files
-                   I:install-dir:1@path:Specify the directory for installing found executables, *.sh resources
+                   I:install-dir:1@path:Specify the directory for installing executables *.sh resources
                    i:install@:1@real-path:Specify additively an executable shell to install in <install-dir>
                    t:test@:1@real-path:Specify additively an executable test to run in the test phase
                    c:dot-file:1@key-value-path:Install, as a dot-file, the file whose basename is <KEY> to the location denoted by <VALUE> within a key/value pair (<KEY>=<VALUE>)
@@ -98,8 +98,8 @@ version
 # **
 # * Retrieve the first value associated to the given key.
 # * @param ${1} the key to look for
-# * @param ${2,} the remaining key/value associations
-# * @print the value associated to the key in ${2,}
+# * @param ${2}...${#} the remaining key/value associations
+# * @print the value associated to the key in ${2}...${#}
 # * @return ${E_SUCCESS} if the key was found else ${E_FAILURE}
 # */
 get_key_value() {
@@ -116,7 +116,10 @@ get_key_value() {
     return ${E_FAILURE}
 }
 # **
-# * Build a search/replace expression to use within source files to replace each key parameter with its value.
+# * Iterate over all key-value parameters ('key'='value') in ${@}
+# * to build a search/replace expression that substitutes each
+# * identified occurrence of 'key', matched as <__key__> in source
+# * files, with its associated value 'value'.
 # * @param ${@} the whole argument vector
 # * @print the search/replace expression
 # */
@@ -134,7 +137,10 @@ source_replace_expression() {
     printf "%s" "${expression};s#/\{2,\}#/#g"
 }
 # **
-# * Build a search/replace expression to use within test files to replace each key parameter with its value.
+# * Iterate over all key-value parameters ('key'='value') in ${@}
+# * to build a search/replace expression that substitutes each
+# * identified occurrence of 'key', matched as <__key__> in test
+# * files, with its associated value 'value'.
 # * @param ${@} the whole argument vector
 # * @print the search/replace expression
 # */
@@ -158,9 +164,10 @@ test_replace_expression() {
     printf "%s" "${expression};s#/\{2,\}#/#g"
 }
 # **
-# * Retrieve shell/rc filenames in the resource directory.
+# * List *.sh, *rc resources in the given directory.
 # * @param ${@} the whole argument vector
-# * @param ${1} an option indicating whether to exclude or not test (*test.sh) files in the current lookup
+# * @param ${1} an option indicating whether to exclude
+# * or not test (*test.sh) files of the current list
 # * @print the filenames matching either the mask *.sh or *rc
 # */
 list_files_accordingly() {
@@ -188,28 +195,22 @@ list_files_accordingly() {
     done
 }
 # **
-# * Copy resources to the target directory.
+# * Copy *sh, *rc resources to the target directory.
 # * @param ${@} the whole argument vector
 # */
 copy_resources() {
     list_files_accordingly "$@" | xargs -I{} install -c -m 644 {} "$(get_key_value "TARGETDIR" "$@")"
 }
 # **
-# * Copy source files, excluding tests *test.sh, to the target directory.
+# * Copy *.sh, excluding *test.sh, to the target directory.
 # * @param ${@} the whole argument vector
 # */
 copy_sources_only() {
     copy_resources --exclude-tests "$@"
 }
 # **
-# * Copy source files, including tests, to the target directory.
-# * @param ${@} the whole argument vector
-# */
-copy_resources_for_test() {
-    copy_resources "$@"
-}
-# **
-# * Edit in place source files to substitute specified patterns with their corresponding values.
+# * Edit in place source files to search/replace configurable
+# * placeholders.
 # * @param ${@} the whole argument vector
 # */
 filter_sources() {
@@ -219,7 +220,7 @@ filter_sources() {
         if [ "$f" != "${wrkdir}/install/*" -a "$(basename "$f")" != "libconfigure.sh" ]; then
            k="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "$f" 2>/dev/null | head -n1)"
            if [ "$k" ]; then
-              printf "configure.bootstrap:filter_sources failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n" >&2
+              __syserr "configure.bootstrap:filter_sources failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n"
               return ${E_FAILURE}
            fi
         fi
@@ -227,7 +228,8 @@ filter_sources() {
     return ${E_SUCCESS}
 }
 # **
-# * Edit in place test files to substitute specified patterns with their corresponding values.
+# * Edit in place test files to search/replace configurable
+# * placeholders.
 # * @param ${@} the whole argument vector
 # */
 filter_tests() {
@@ -237,7 +239,7 @@ filter_tests() {
         if [ "$f" != "${wrkdir}/test/*" -a "$(basename "$f")" != "libconfigure.sh" ]; then
            k="$(perl -ne "print if s#.*<__(.*?)__>.*#\1#g" "$f" 2>/dev/null | head -n1)"
            if [ "$k" ]; then
-              printf "configure.bootstrap:filter_tests failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n" >&2
+              __syserr "configure.bootstrap:filter_tests failed: found at least one unresolved pattern: <__${k}__>; reconfigure with --search-replace ${k}=<VALUE>\n"
               return ${E_FAILURE}
            fi
         fi
@@ -245,7 +247,7 @@ filter_tests() {
     return ${E_SUCCESS}
 }
 # **
-# * Print resources paths imported in filtered *.sh files
+# * Print fully imported file paths.
 # * @param ${@} the whole argument vector
 # * @print a list of paths, one per line
 # */
@@ -254,9 +256,9 @@ print_imported_resources_paths() {
     perl -ne "print if s#^[[:space:]]*(?:__import_resource_or_fail|\.)[[:space:]]+\"(.*?)\".*#\1#g" "${wrkdir}/install/"* 2>/dev/null | awk '!commands[$0]++'
 }
 # **
-# * Evaluate paths, doing required search/replace patterns operations, before sorting them to uniqueness.
+# * Print fully file paths removing duplicates
 # * @param ${@} the whole argument vector
-# * @print the evaluated paths, one per line, sorted to uniqueness
+# * @print a list of paths, one per line, sorted to uniqueness
 # */
 render_paths() { sed "$(source_replace_expression "$@")" | sort -u ; }
 # **
@@ -312,19 +314,19 @@ doc() {
     fi
 }
 # **
-# * Run linter checks against executable shells.
+# * Run linter checks against executable *.sh resources.
 # * @param ${@} the whole argument vector
 # */
 check() {
     local wrkdir="$(get_key_value "WORKING_DIR" "$@")" value r
     if ! type shellcheck >/dev/null 2>&1; then
-       printf "configure.bootstrap:check: a shell check was planed but shellcheck is not installed\n" >&2
+       __syserr "configure.bootstrap:check: a shell check was planed but shellcheck is not installed\n"
     else
        for value in $(get_key_value "INSTALL" "$@"); do
            if [ -f "$value" ]; then
               shellcheck -x ${wrkdir}/install/${value}
               if [ ${r:=${?}} -ne 0 ]; then
-                 printf "configure.bootstrap:check: shellcheck exited with status ${r} when processing ${value}\n" >&2
+                 __syserr "configure.bootstrap:check: shellcheck exited with status ${r} when processing ${value}\n"
               fi
            fi
        done
@@ -344,7 +346,8 @@ generate_tests_launchers() {
     done | sort -uR
 }
 # **
-# * Generate in the current directory a makefile configured with user options.
+# * Generate in the current directory a makefile configured with the options
+# * passed into parameter.
 # * @param ${@} the whole argument vector
 # * @return 0 if the generated makefile is not empty else a non-zero value
 # */
@@ -375,7 +378,7 @@ makefile() {
       printf "\t@sh -c '. \$(WORKING_DIR)/libconfigure.sh; copy_sources_only TARGETDIR=\$(WORKING_DIR)/install \$(CONFIGURE_ARGS)'\n"
       printf "\n"
       printf "copy_resources_for_test: test_directory\n"
-      printf "\t@sh -c '. \$(WORKING_DIR)/libconfigure.sh; copy_resources_for_test TARGETDIR=\$(WORKING_DIR)/test \$(CONFIGURE_ARGS)'\n"
+      printf "\t@sh -c '. \$(WORKING_DIR)/libconfigure.sh; copy_resources TARGETDIR=\$(WORKING_DIR)/test \$(CONFIGURE_ARGS)'\n"
       printf "\n"
       printf "copy: copy_sources_only copy_resources_for_test\n"
       printf "\n"
@@ -406,7 +409,7 @@ makefile() {
 }
 # **
 # * Parse command line arguments.
-# * @print a vector holding user configured options
+# * @print a vector holding the user command line arguments
 # */
 parse_options() {
     local argv
@@ -442,7 +445,7 @@ __configure () {
     elif [ ${r} -ne ${E_SUCCESS} ]; then
        return ${E_FAILURE}
     elif ! makefile "$argv"; then
-       printf "Configure failed: could not generate makefile.\n" >&2
+       __syserr "Configure failed: could not generate makefile.\n" >&2
        return ${E_FAILURE}
     fi
     return ${E_SUCCESS}
